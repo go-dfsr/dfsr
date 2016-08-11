@@ -70,19 +70,22 @@ func New(duration time.Duration, lookup Lookup) *Cache {
 // Set saves a value in the cache for the given key. If a value already exists
 // in the cache for that key, the existing value is replaced.
 func (cache *Cache) Set(key Key, value Value) {
+	now := time.Now()
 	cache.m.Lock()
 	defer cache.m.Unlock()
-	cache.set(key, value)
+	cache.set(now, key, value)
 }
 
 // set does not acquire a lock. It is the caller's responsibility to maintain
 // a read/write lock on the cache during the call.
-func (cache *Cache) set(k Key, v Value) {
+func (cache *Cache) set(timestamp time.Time, k Key, v Value) {
 	cache.delete(k)
 	cache.data[k] = &cacheEntry{
-		Key:   k,
-		Value: v,
+		Timestamp: timestamp,
+		Key:       k,
+		Value:     v,
 	}
+	cache.log = append(cache.log, logEntry{Timestamp: timestamp, Key: k})
 	cache.spawnCleanup()
 }
 
@@ -149,9 +152,10 @@ func (cache *Cache) pend(k Key) (p *pendingEntry) {
 
 func (cache *Cache) retrieve(k Key, p *pendingEntry) {
 	p.Value, p.Err = cache.lookup(k)
+	now := time.Now()
 	cache.m.Lock()
 	if p.Err == nil {
-		cache.set(k, p.Value)
+		cache.set(now, k, p.Value)
 	}
 	delete(cache.pending, k)
 	cache.m.Unlock()
@@ -166,11 +170,7 @@ func (cache *Cache) retrieve(k Key, p *pendingEntry) {
 func (cache *Cache) delete(k Key) {
 	entry, found := cache.data[k]
 	if found {
-		if r, ok := entry.Value.(Releaser); ok {
-			go r.Release()
-		} else if c, ok := entry.Value.(io.Closer); ok {
-			go c.Close()
-		}
+		release(entry.Value)
 		delete(cache.data, k)
 	}
 }
@@ -191,10 +191,12 @@ func (cache *Cache) spawnCleanup() {
 // cache over time. It runs until the cache is empty, at which point it exits.
 func (cache *Cache) cleanup(next time.Time) {
 	var more bool
+	now := time.Now()
 	for {
-		<-time.After(next.Sub(time.Now()))
+		<-time.After(next.Sub(now))
+		now = time.Now()
 		cache.m.Lock()
-		next, more = cache.validate()
+		next, more = cache.validate(now)
 		if !more {
 			cache.cleaning = false
 			cache.m.Unlock()
@@ -209,15 +211,32 @@ func (cache *Cache) cleanup(next time.Time) {
 //
 // validate does not acquire a lock. It is the caller's responsibility to
 // maintain a read/write lock on the cache during the call.
-func (cache *Cache) validate() (next time.Time, more bool) {
-	now := time.Now()
+func (cache *Cache) validate(now time.Time) (next time.Time, more bool) {
 	for len(cache.log) > 0 {
-		entry := cache.log[0]
-		if entry.Timestamp.Add(cache.d).Before(now) {
-			return entry.Timestamp.Add(cache.d), true
+		next := cache.log[0].Timestamp.Add(cache.d)
+		if now.Before(next) {
+			return next, true
 		}
-		cache.delete(entry.Key)
+
+		k := cache.log[0].Key
+		entry, found := cache.data[k]
+		if found {
+			expiration := entry.Timestamp.Add(cache.d)
+			if expiration.Before(now) {
+				release(entry.Value)
+				delete(cache.data, k)
+			}
+		}
+
 		cache.log = cache.log[1:]
 	}
 	return time.Time{}, false
+}
+
+func release(v Value) {
+	if r, ok := v.(Releaser); ok {
+		go r.Release()
+	} else if c, ok := v.(io.Closer); ok {
+		go c.Close()
+	}
 }
