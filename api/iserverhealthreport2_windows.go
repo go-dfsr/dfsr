@@ -22,10 +22,10 @@ func NewIServerHealthReport2(server string, clsid *ole.GUID) (*IServerHealthRepo
 // GetReport retrieves a report for the given replication group.
 //
 // [MS-DFSRH]: 3.1.5.4.5
-func (v *IServerHealthReport) GetReport(group ole.GUID, server string, referenceVectors ole.SafeArrayConversion, flags int32) (memberVectors ole.SafeArrayConversion, report string, err error) {
+func (v *IServerHealthReport) GetReport(group ole.GUID, server string, referenceVectors *ole.SafeArrayConversion, flags int32) (memberVectors *ole.SafeArrayConversion, report string, err error) {
 	sbstr := ole.SysAllocStringLen(server)
 	if sbstr == nil {
-		return ole.SafeArrayConversion{}, "", ole.NewError(ole.E_OUTOFMEMORY)
+		return nil, "", ole.NewError(ole.E_OUTOFMEMORY)
 	}
 	defer ole.SysFreeString(sbstr)
 	var rbstr *int16
@@ -47,7 +47,7 @@ func (v *IServerHealthReport) GetReport(group ole.GUID, server string, reference
 	if hr == 0 {
 		report = ole.BstrToString((*uint16)(unsafe.Pointer(rbstr)))
 	} else {
-		return ole.SafeArrayConversion{}, "", convertHresultToError(hr)
+		return nil, "", convertHresultToError(hr)
 	}
 	return
 }

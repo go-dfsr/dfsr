@@ -1,6 +1,7 @@
 package dfsr
 
 import (
+	"errors"
 	"sync"
 
 	"github.com/go-ole/go-ole"
@@ -53,9 +54,9 @@ func (r *Reporter) Close() {
 	r.iface = nil
 }
 
-// Vectors returns the reference version vectors for the requested replication
+// Vector returns the reference version vectors for the requested replication
 // group.
-func (r *Reporter) Vectors(group *ole.GUID) (vector *versionvector.Vector, err error) {
+func (r *Reporter) Vector(group *ole.GUID) (vector *versionvector.Vector, err error) {
 	r.m.Lock()
 	defer r.m.Unlock()
 	if r.closed() {
@@ -70,7 +71,7 @@ func (r *Reporter) Vectors(group *ole.GUID) (vector *versionvector.Vector, err e
 }
 
 // Backlog returns the current backlog when compared against the given
-// reference version vectors.
+// reference version vector.
 func (r *Reporter) Backlog(vector *versionvector.Vector) (backlog *ole.SafeArrayConversion, err error) {
 	r.m.Lock()
 	defer r.m.Unlock()
@@ -79,4 +80,32 @@ func (r *Reporter) Backlog(vector *versionvector.Vector) (backlog *ole.SafeArray
 	}
 	// TODO: Check dimensions of the returned backlog for sanity
 	return r.iface.GetReferenceBacklogCounts(vector.Data())
+}
+
+// Report generates a report when compared against the given
+// reference version vector.
+func (r *Reporter) Report(group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, err error) {
+	if backlog && vector == nil {
+		return nil, "", errors.New("Backlog reports require that a reference member vector is provided.")
+	}
+
+	r.m.Lock()
+	defer r.m.Unlock()
+	if r.closed() {
+		return nil, "", ErrClosed
+	}
+	// TODO: Check dimensions of the returned backlog for sanity
+
+	flags := api.REPORTING_FLAGS_NONE
+	if backlog {
+		flags |= api.REPORTING_FLAGS_BACKLOG
+	}
+	if files {
+		flags |= api.REPORTING_FLAGS_FILES
+	}
+
+	if backlog {
+		return r.iface.GetReport(*group, "", vector.Data(), int32(flags))
+	}
+	return r.iface.GetReport(*group, "", nil, int32(flags))
 }
