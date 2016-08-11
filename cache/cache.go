@@ -1,0 +1,223 @@
+// The cache package provides a generic threadsafe expiring cache implementation
+// that is capable of passing cache misses through to a lookup function.
+
+package cache
+
+import (
+	"io"
+	"sync"
+	"time"
+)
+
+const cacheSize = 32
+
+// Key defines a cache key.
+type Key interface{}
+
+// Value defines a cache value.
+type Value interface{}
+
+// Releaser is an interface that cache values may implement to be released
+// when their entries expire.
+type Releaser interface {
+	Release()
+}
+
+// Lookup defines a lookup function for retrieving new cache values.
+type Lookup func(key Key) (value Value, err error)
+
+// Cache is a threadsafe expiring cache that is capable of passing cache misses
+// through to a lookup function.
+type Cache struct {
+	d        time.Duration
+	m        sync.RWMutex
+	data     map[Key]*cacheEntry
+	pending  map[Key]*pendingEntry
+	log      []logEntry
+	cleaning bool
+	lookup   Lookup
+}
+
+type cacheEntry struct {
+	Timestamp time.Time
+	Key
+	Value
+}
+
+type pendingEntry struct {
+	WG sync.WaitGroup
+	Value
+	Err error
+}
+
+type logEntry struct {
+	Timestamp time.Time
+	Key
+}
+
+// New returns a new cache whose values survive for the given duration and are
+// retrieved with the given lookup function.
+func New(duration time.Duration, lookup Lookup) *Cache {
+	return &Cache{
+		d:       duration,
+		data:    make(map[Key]*cacheEntry, cacheSize),
+		pending: make(map[Key]*pendingEntry, cacheSize),
+		log:     make([]logEntry, 0, cacheSize),
+		lookup:  lookup,
+	}
+}
+
+// Set saves a value in the cache for the given key. If a value already exists
+// in the cache for that key, the existing value is replaced.
+func (cache *Cache) Set(key Key, value Value) {
+	cache.m.Lock()
+	defer cache.m.Unlock()
+	cache.set(key, value)
+}
+
+// set does not acquire a lock. It is the caller's responsibility to maintain
+// a read/write lock on the cache during the call.
+func (cache *Cache) set(k Key, v Value) {
+	cache.delete(k)
+	cache.data[k] = &cacheEntry{
+		Key:   k,
+		Value: v,
+	}
+	cache.spawnCleanup()
+}
+
+// Value returns the value for the given key if it exists in the cache and has
+// not expired. If the cached value is missing or expired, ok will be false.
+func (cache *Cache) Value(key Key) (value Value, ok bool) {
+	cache.m.RLock()
+	defer cache.m.RUnlock()
+	return cache.value(key)
+}
+
+// value does not acquire a lock. It is the caller's responsibility to maintain
+// a read lock on the cache during the call.
+func (cache *Cache) value(k Key) (value Value, ok bool) {
+	entry, found := cache.data[k]
+	if found && entry.Timestamp.Add(cache.d).Before(time.Now()) {
+		return entry.Value, true
+	}
+	return nil, false
+}
+
+// Lookup returns the value for the given key if it exists in the cache and has
+// not expired. If the cached value is missing or expired, a lookup will be
+// performed.
+//
+// TODO: Add context after Go 1.7 is released?
+func (cache *Cache) Lookup(key Key) (value Value, err error) {
+	// First attempt with read lock
+	cache.m.RLock()
+	value, found := cache.value(key)
+	cache.m.RUnlock()
+	if found {
+		return value, nil
+	}
+
+	// Second attempt with write lock
+	cache.m.Lock()
+	value, found = cache.value(key)
+	if found {
+		cache.m.Unlock()
+		return value, nil
+	}
+
+	// Wait for a response
+	p := cache.pend(key)
+	cache.m.Unlock()
+	p.WG.Wait()
+
+	return p.Value, p.Err
+}
+
+// pend does not acquire a lock. It is the caller's responsibility to maintain
+// a read/write lock on the cache during the call.
+func (cache *Cache) pend(k Key) (p *pendingEntry) {
+	p, found := cache.pending[k]
+	if !found {
+		p = &pendingEntry{}
+		cache.pending[k] = p
+		p.WG.Add(1)
+		go cache.retrieve(k, p)
+	}
+	return
+}
+
+func (cache *Cache) retrieve(k Key, p *pendingEntry) {
+	p.Value, p.Err = cache.lookup(k)
+	cache.m.Lock()
+	if p.Err == nil {
+		cache.set(k, p.Value)
+	}
+	delete(cache.pending, k)
+	cache.m.Unlock()
+	p.WG.Done()
+}
+
+// delete will remove the value with the given key from the cache if it exists.
+// It releases any resources that were consumed by the value.
+//
+// delete does not acquire a lock. It is the caller's responsibility to
+// maintain a read/write lock on the cache during the call.
+func (cache *Cache) delete(k Key) {
+	entry, found := cache.data[k]
+	if found {
+		if r, ok := entry.Value.(Releaser); ok {
+			go r.Release()
+		} else if c, ok := entry.Value.(io.Closer); ok {
+			go c.Close()
+		}
+		delete(cache.data, k)
+	}
+}
+
+// spawnCleanup will spawn a cleanup goroutine if it's needed and one isn't
+// already running.
+//
+// spawnCleanup does not acquire a lock. It is the caller's responsibility to
+// maintain a read/write lock on the cache during the call.
+func (cache *Cache) spawnCleanup() {
+	if len(cache.log) > 0 && !cache.cleaning {
+		cache.cleaning = true
+		go cache.cleanup(cache.log[0].Timestamp)
+	}
+}
+
+// cleanup is run on its own goroutine and removes expired entries from the
+// cache over time. It runs until the cache is empty, at which point it exits.
+func (cache *Cache) cleanup(next time.Time) {
+	var more bool
+	for {
+		<-time.After(next.Sub(time.Now()))
+		cache.m.Lock()
+		next, more = cache.validate()
+		if !more {
+			cache.cleaning = false
+			cache.m.Unlock()
+			return
+		}
+		cache.m.Unlock()
+	}
+}
+
+// validate checks the validity of all cache entries and deletes those that are
+// expired.
+//
+// validate does not acquire a lock. It is the caller's responsibility to
+// maintain a read/write lock on the cache during the call.
+func (cache *Cache) validate() (next time.Time, more bool) {
+	now := time.Now()
+	for len(cache.log) > 0 {
+		entry := cache.log[0]
+		if entry.Timestamp.Add(cache.d).Before(now) {
+			return entry.Timestamp.Add(cache.d), true
+		}
+		cache.delete(entry.Key)
+		cache.log = cache.log[1:]
+	}
+	return time.Time{}, false
+}
