@@ -9,7 +9,7 @@ import (
 	"github.com/go-ole/go-ole"
 
 	"gopkg.in/adsi.v0"
-	"gopkg.in/dfsr.v0"
+	"gopkg.in/dfsr.v0/core"
 )
 
 const groupQueryDelay = 25 * time.Millisecond // Group query delay to avoid rate-limiting by LDAP servers
@@ -53,7 +53,7 @@ func (fetch *fetcher) Close() {
 	}
 }
 
-func (fetch *fetcher) NamingContext() (nc dfsr.NamingContext, err error) {
+func (fetch *fetcher) NamingContext() (nc core.NamingContext, err error) {
 	d, err := fetch.domain.ToObject()
 	if err != nil {
 		return
@@ -80,7 +80,7 @@ func (fetch *fetcher) NamingContext() (nc dfsr.NamingContext, err error) {
 
 // Domain will fetch DFSR configuration data from the fetcher's domain using the
 // provided ADSI client.
-func (fetch *fetcher) Domain() (domain dfsr.Domain, err error) {
+func (fetch *fetcher) Domain() (domain core.Domain, err error) {
 	start := time.Now()
 
 	groups, err := fetch.groups()
@@ -93,14 +93,14 @@ func (fetch *fetcher) Domain() (domain dfsr.Domain, err error) {
 		return
 	}
 
-	return dfsr.Domain{
+	return core.Domain{
 		NamingContext:  nc,
 		Groups:         groups,
 		ConfigDuration: time.Now().Sub(start),
 	}, nil
 }
 
-func (fetch *fetcher) groups() (groups []dfsr.Group, err error) {
+func (fetch *fetcher) groups() (groups []core.Group, err error) {
 	iter, err := fetch.settings.Children()
 	if err != nil {
 		return nil, err
@@ -141,7 +141,7 @@ func (fetch *fetcher) groups() (groups []dfsr.Group, err error) {
 }
 
 /*
-func (fetch *fetcher) groups() (groups []dfsr.Group, err error) {
+func (fetch *fetcher) groups() (groups []core.Group, err error) {
 	iter, err := fetch.settings.Children()
 	if err != nil {
 		return nil, err
@@ -163,7 +163,7 @@ func (fetch *fetcher) groups() (groups []dfsr.Group, err error) {
 }
 */
 
-func (fetch *fetcher) GroupByName(groupName string) (group dfsr.Group, err error) {
+func (fetch *fetcher) GroupByName(groupName string) (group core.Group, err error) {
 	groupName = strings.ToLower(groupName)
 
 	iter, err := fetch.settings.Children()
@@ -191,7 +191,7 @@ func (fetch *fetcher) GroupByName(groupName string) (group dfsr.Group, err error
 	return
 }
 
-func (fetch *fetcher) GroupByGUID(guid *ole.GUID) (group dfsr.Group, err error) {
+func (fetch *fetcher) GroupByGUID(guid *ole.GUID) (group core.Group, err error) {
 	g, err := fetch.settings.Object("msDFSR-ReplicationGroup", makeDN("CN", guid.String()[:]))
 	if err != nil {
 		return
@@ -200,7 +200,7 @@ func (fetch *fetcher) GroupByGUID(guid *ole.GUID) (group dfsr.Group, err error) 
 	return fetch.group(g)
 }
 
-func (fetch *fetcher) Group(dn string) (group dfsr.Group, err error) {
+func (fetch *fetcher) Group(dn string) (group core.Group, err error) {
 	path := "LDAP://" + dn
 
 	g, err := fetch.client.Open(path)
@@ -212,7 +212,7 @@ func (fetch *fetcher) Group(dn string) (group dfsr.Group, err error) {
 	return fetch.group(g)
 }
 
-func (fetch *fetcher) group(g *adsi.Object) (group dfsr.Group, err error) {
+func (fetch *fetcher) group(g *adsi.Object) (group core.Group, err error) {
 	start := time.Now()
 
 	group.Name, err = g.Name()
@@ -259,7 +259,7 @@ func (fetch *fetcher) group(g *adsi.Object) (group dfsr.Group, err error) {
 	return
 }
 
-func (fetch *fetcher) folders(content *adsi.Container) (folders []dfsr.Folder, err error) {
+func (fetch *fetcher) folders(content *adsi.Container) (folders []core.Folder, err error) {
 	iter, err := content.Children()
 	if err != nil {
 		return nil, err
@@ -280,7 +280,7 @@ func (fetch *fetcher) folders(content *adsi.Container) (folders []dfsr.Folder, e
 	return
 }
 
-func (fetch *fetcher) folder(f *adsi.Object) (folder dfsr.Folder, err error) {
+func (fetch *fetcher) folder(f *adsi.Object) (folder core.Folder, err error) {
 	folder.Name, err = f.Name()
 	if err != nil {
 		return
@@ -295,7 +295,7 @@ func (fetch *fetcher) folder(f *adsi.Object) (folder dfsr.Folder, err error) {
 	return
 }
 
-func (fetch *fetcher) members(topology *adsi.Object) (members []dfsr.Member, err error) {
+func (fetch *fetcher) members(topology *adsi.Object) (members []core.Member, err error) {
 	tc, err := topology.ToContainer()
 	if err != nil {
 		return nil, err
@@ -322,7 +322,7 @@ func (fetch *fetcher) members(topology *adsi.Object) (members []dfsr.Member, err
 	return
 }
 
-func (fetch *fetcher) Member(dn string) (member dfsr.Member, err error) {
+func (fetch *fetcher) Member(dn string) (member core.Member, err error) {
 	path := "LDAP://" + dn
 	m, err := fetch.client.Open(path)
 	if err != nil {
@@ -333,7 +333,7 @@ func (fetch *fetcher) Member(dn string) (member dfsr.Member, err error) {
 	return fetch.member(m, dn)
 }
 
-func (fetch *fetcher) member(m *adsi.Object, dn string) (member dfsr.Member, err error) {
+func (fetch *fetcher) member(m *adsi.Object, dn string) (member core.Member, err error) {
 	member.MemberInfo, err = fetch.memberInfo(m, dn)
 	if err != nil {
 		return
@@ -347,7 +347,7 @@ func (fetch *fetcher) member(m *adsi.Object, dn string) (member dfsr.Member, err
 	return
 }
 
-func (fetch *fetcher) MemberInfo(dn string) (member dfsr.MemberInfo, err error) {
+func (fetch *fetcher) MemberInfo(dn string) (member core.MemberInfo, err error) {
 	member, ok := fetch.mc.Retrieve(dn)
 	if ok {
 		return
@@ -362,7 +362,7 @@ func (fetch *fetcher) MemberInfo(dn string) (member dfsr.MemberInfo, err error) 
 	return fetch.memberInfo(m, dn)
 }
 
-func (fetch *fetcher) memberInfo(m *adsi.Object, dn string) (member dfsr.MemberInfo, err error) {
+func (fetch *fetcher) memberInfo(m *adsi.Object, dn string) (member core.MemberInfo, err error) {
 	if dn == "" {
 		path, perr := m.Path()
 		if err != nil {
@@ -396,7 +396,7 @@ func (fetch *fetcher) memberInfo(m *adsi.Object, dn string) (member dfsr.MemberI
 	return
 }
 
-func (fetch *fetcher) connections(member *adsi.Object) (connections []dfsr.Connection, err error) {
+func (fetch *fetcher) connections(member *adsi.Object) (connections []core.Connection, err error) {
 	mc, err := member.ToContainer()
 	if err != nil {
 		return nil, err
@@ -423,7 +423,7 @@ func (fetch *fetcher) connections(member *adsi.Object) (connections []dfsr.Conne
 	return
 }
 
-func (fetch *fetcher) connection(c *adsi.Object) (conn dfsr.Connection, err error) {
+func (fetch *fetcher) connection(c *adsi.Object) (conn core.Connection, err error) {
 	conn.Name, err = c.Name()
 	if err != nil {
 		return
@@ -450,7 +450,7 @@ func (fetch *fetcher) connection(c *adsi.Object) (conn dfsr.Connection, err erro
 	return
 }
 
-func (fetch *fetcher) Computer(dn string) (computer dfsr.Computer, err error) {
+func (fetch *fetcher) Computer(dn string) (computer core.Computer, err error) {
 	path := "LDAP://" + dn
 
 	c, err := fetch.client.Open(path)
@@ -462,7 +462,7 @@ func (fetch *fetcher) Computer(dn string) (computer dfsr.Computer, err error) {
 	return fetch.computer(c)
 }
 
-func (fetch *fetcher) computer(c *adsi.Object) (computer dfsr.Computer, err error) {
+func (fetch *fetcher) computer(c *adsi.Object) (computer core.Computer, err error) {
 	computer.DN, err = c.Path()
 	if err != nil {
 		return

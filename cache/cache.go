@@ -1,6 +1,5 @@
-// The cache package provides a generic threadsafe expiring cache implementation
+// Package cache provides a generic threadsafe expiring cache implementation
 // that is capable of passing cache misses through to a lookup function.
-
 package cache
 
 import (

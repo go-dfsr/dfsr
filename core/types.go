@@ -1,4 +1,4 @@
-package dfsr
+package core
 
 import (
 	"time"

@@ -1,4 +1,4 @@
-package dfsr
+package helper
 
 import "errors"
 

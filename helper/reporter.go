@@ -1,4 +1,4 @@
-package dfsr
+package helper
 
 import (
 	"errors"
@@ -7,7 +7,7 @@ import (
 	"github.com/go-ole/go-ole"
 	"github.com/scjalliance/comshim"
 
-	"gopkg.in/dfsr.v0/api"
+	"gopkg.in/dfsr.v0/helper/api"
 	"gopkg.in/dfsr.v0/versionvector"
 )
 
