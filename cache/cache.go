@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"errors"
 	"io"
 	"sync"
 	"time"
@@ -30,6 +31,12 @@ type Closer interface {
 
 // Lookup defines a lookup function for retrieving new cache values.
 type Lookup func(key Key) (value Value, err error)
+
+var (
+	// ErrClosed is returned from calls to the cache or in the event that the
+	// Close() function has already been called.
+	ErrClosed = errors.New("The cache is closing or already closed.")
+)
 
 // Cache is a threadsafe expiring cache that is capable of passing cache misses
 // through to a lookup function.
@@ -72,12 +79,53 @@ func New(duration time.Duration, lookup Lookup) *Cache {
 	}
 }
 
+func (cache *Cache) closed() bool {
+	return (cache.data == nil)
+}
+
+// Close will release any resources consumed by the cache and its contents. It
+// will also prevent further use of the cache.
+func (cache *Cache) Close() {
+	cache.m.Lock()
+	defer cache.m.Unlock()
+	if cache.closed() {
+		return
+	}
+	for _, entry := range cache.data {
+		release(entry.Value)
+	}
+	cache.data = nil
+	cache.pending = nil
+	cache.log = nil
+	cache.lookup = nil
+}
+
+// Evict will expuge all existing values from the cache. Outstanding lookups
+// that are still pending will not be affected.
+func (cache *Cache) Evict() {
+	cache.m.Lock()
+	defer cache.m.Unlock()
+	if cache.closed() {
+		return
+	}
+	for _, entry := range cache.data {
+		release(entry.Value)
+	}
+	cache.data = make(map[Key]*cacheEntry, cacheSize)
+	cache.log = make([]logEntry, 0, cacheSize)
+}
+
 // Set saves a value in the cache for the given key. If a value already exists
 // in the cache for that key, the existing value is replaced.
+//
+// If the cache has been closed then Set will do nothing.
 func (cache *Cache) Set(key Key, value Value) {
 	now := time.Now()
 	cache.m.Lock()
 	defer cache.m.Unlock()
+	if cache.closed() {
+		return
+	}
 	cache.set(now, key, value)
 }
 
@@ -96,8 +144,13 @@ func (cache *Cache) set(timestamp time.Time, k Key, v Value) {
 
 // Value returns the value for the given key if it exists in the cache and has
 // not expired. If the cached value is missing or expired, ok will be false.
+//
+// If the cache has been closed then ok will be false.
 func (cache *Cache) Value(key Key) (value Value, ok bool) {
 	cache.m.RLock()
+	if cache.closed() {
+		return
+	}
 	defer cache.m.RUnlock()
 	return cache.value(key)
 }
@@ -116,10 +169,15 @@ func (cache *Cache) value(k Key) (value Value, ok bool) {
 // not expired. If the cached value is missing or expired, a lookup will be
 // performed.
 //
+// If the cache has been closed then ErrClosed will be returned.
+//
 // TODO: Add context after Go 1.7 is released?
 func (cache *Cache) Lookup(key Key) (value Value, err error) {
 	// First attempt with read lock
 	cache.m.RLock()
+	if cache.closed() {
+		return nil, ErrClosed
+	}
 	value, found := cache.value(key)
 	cache.m.RUnlock()
 	if found {
@@ -128,6 +186,9 @@ func (cache *Cache) Lookup(key Key) (value Value, err error) {
 
 	// Second attempt with write lock
 	cache.m.Lock()
+	if cache.closed() {
+		return nil, ErrClosed
+	}
 	value, found = cache.value(key)
 	if found {
 		cache.m.Unlock()
@@ -156,13 +217,21 @@ func (cache *Cache) pend(k Key) (p *pendingEntry) {
 }
 
 func (cache *Cache) retrieve(k Key, p *pendingEntry) {
-	p.Value, p.Err = cache.lookup(k)
+	p.Value, p.Err = cache.lookup(k) // This may block for some time
 	now := time.Now()
 	cache.m.Lock()
-	if p.Err == nil {
-		cache.set(now, k, p.Value)
+	if cache.closed() {
+		if p.Err == nil {
+			release(p.Value)
+		}
+		p.Value = nil
+		p.Err = ErrClosed
+	} else {
+		if p.Err == nil {
+			cache.set(now, k, p.Value)
+		}
+		delete(cache.pending, k)
 	}
-	delete(cache.pending, k)
 	cache.m.Unlock()
 	p.WG.Done()
 }
