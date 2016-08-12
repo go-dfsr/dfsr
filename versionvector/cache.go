@@ -9,7 +9,7 @@ import (
 )
 
 // Lookup defines a version vector lookup function.
-type Lookup func(group ole.GUID) (vector *Vector, err error)
+type Lookup func(guid ole.GUID) (vector *Vector, err error)
 
 func castLookup(lookup Lookup) cache.Lookup {
 	return func(key cache.Key) (value cache.Value, err error) {
@@ -33,30 +33,47 @@ func NewCache(duration time.Duration, lookup Lookup) *Cache {
 	}
 }
 
-// Set addes the vector to the cache for the given group. If a value already
-// exists for that group it is replaced.
-func (cache *Cache) Set(group ole.GUID, vector *Vector) {
-	cache.c.Set(group, vector)
+// Close will release any resources consumed by the cache and its contents. It
+// will also prevent further use of the cache.
+func (cache *Cache) Close() {
+	cache.c.Close()
 }
 
-// Value returns the cached vector for the given group if it exists and has
-// not expired. When a value is present ok will be true, otherwise it will be
+// Evict will expuge all existing values from the cache. Outstanding lookups
+// that are still pending will not be affected.
+func (cache *Cache) Evict() {
+	cache.c.Evict()
+}
+
+// Set adds the vector to the cache for the given GUID. If a value already
+// exists in the cache for that GUID, the existing value is replaced.
+//
+// If the cache has been closed then Set will do nothing.
+func (cache *Cache) Set(guid ole.GUID, vector *Vector) {
+	cache.c.Set(guid, vector)
+}
+
+// Value returns the cached vector for the given GUID if it exists in the cache
+// and has not expired. If the cached value is missing or expired, ok will be
 // false.
-func (cache *Cache) Value(group ole.GUID) (vector *Vector, ok bool) {
-	v, ok := cache.c.Value(group)
+//
+// If the cache has been closed then ok will be false.
+func (cache *Cache) Value(guid ole.GUID) (vector *Vector, ok bool) {
+	v, ok := cache.c.Value(guid)
 	if ok {
 		vector, _ = v.(*Vector).Duplicate()
 	}
 	return
 }
 
-// Lookup returns the cached vector for the given group if there is an unexpired
-// value already present in the cache. If the cached value is missing or
-// expired, a lookup will be performed and the result of that lookup will be
-// returned.
+// Lookup returns the cached vector for the given GUID if it exists in the
+// cache and has not expired. If the cached value is missing or expired, a
+// lookup will be performed.
+//
+// If the cache has been closed then ErrClosed will be returned.
 //
 // TODO: Add context after Go 1.7 is released?
-func (cache *Cache) Lookup(group ole.GUID) (vector *Vector, err error) {
-	v, err := cache.c.Lookup(group)
+func (cache *Cache) Lookup(guid ole.GUID) (vector *Vector, err error) {
+	v, err := cache.c.Lookup(guid)
 	return v.(*Vector).Duplicate()
 }
