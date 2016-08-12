@@ -22,6 +22,12 @@ type Releaser interface {
 	Release()
 }
 
+// Closer is an interface that cache values may implement to be closed
+// when their entries expire.
+type Closer interface {
+	Close()
+}
+
 // Lookup defines a lookup function for retrieving new cache values.
 type Lookup func(key Key) (value Value, err error)
 
@@ -235,6 +241,8 @@ func (cache *Cache) validate(now time.Time) (next time.Time, more bool) {
 func release(v Value) {
 	if r, ok := v.(Releaser); ok {
 		go r.Release()
+	} else if c, ok := v.(Closer); ok {
+		go c.Close()
 	} else if c, ok := v.(io.Closer); ok {
 		go c.Close()
 	}
