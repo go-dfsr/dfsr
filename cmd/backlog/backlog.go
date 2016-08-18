@@ -16,10 +16,12 @@ var domainFlag string
 var groupFlag regexSlice
 var fromFlag regexSlice
 var toFlag regexSlice
+var memberFlag regexSlice
 var loopFlag uintOrInf
 var delaySecondsFlag uint
 var cacheSecondsFlag uint
 var skipFlag regexSlice
+var minFlag uint
 
 const defaultLoopValue = 1
 
@@ -28,10 +30,12 @@ func init() {
 	flag.Var(&groupFlag, "g", "group to query")
 	flag.Var(&fromFlag, "f", "regex of source hostname")
 	flag.Var(&toFlag, "t", "regex of dest hostname")
+	flag.Var(&memberFlag, "m", "regex of member hostname (matches either dest or source)")
 	flag.Var(&loopFlag, "loop", "number of iterations or \"infinite\"")
 	flag.UintVar(&delaySecondsFlag, "delay", 5, "number of seconds to deley between loops")
 	flag.UintVar(&cacheSecondsFlag, "cache", 5, "number of seconds to cache vectors")
 	flag.Var(&skipFlag, "skip", "regex of hostname to skip")
+	flag.UintVar(&minFlag, "min", 0, "minimum backlog to display")
 }
 
 func main() {
@@ -45,7 +49,7 @@ func main() {
 		return
 	}
 
-	domain, connections, err := setup(domainFlag, groupFlag, fromFlag, toFlag, skipFlag)
+	domain, connections, err := setup(domainFlag, groupFlag, fromFlag, toFlag, memberFlag, skipFlag)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -62,12 +66,12 @@ func main() {
 
 	if loopFlag.Inf {
 		for loop := uint(0); ; loop++ {
-			run(domain, loop, client, connections)
+			run(domain, loop, minFlag, client, connections)
 			time.Sleep(time.Duration(delaySecondsFlag) * time.Second)
 		}
 	} else {
 		for loop := uint(0); loop < loopFlag.Value; loop++ {
-			run(domain, loop, client, connections)
+			run(domain, loop, minFlag, client, connections)
 			if loop+1 < loopFlag.Value {
 				fmt.Println("")
 				time.Sleep(time.Duration(delaySecondsFlag) * time.Second)
@@ -76,7 +80,7 @@ func main() {
 	}
 }
 
-func run(domain string, iteration uint, client *helper.Client, connections []connection) {
+func run(domain string, iteration uint, min uint, client *helper.Client, connections []connection) {
 	var wg sync.WaitGroup
 	wg.Add(len(connections))
 
@@ -96,6 +100,11 @@ func run(domain string, iteration uint, client *helper.Client, connections []con
 
 	for i := 0; i < len(connections); i++ {
 		c := &connections[i]
+
+		if c.TotalBacklog() < min {
+			continue
+		}
+
 		fmt.Printf("%-50s %-50s %-50s ", c.Group.Name, c.From, c.To)
 		if c.Err != nil {
 			fmt.Printf("%-15v ", c.Err)
@@ -109,7 +118,7 @@ func run(domain string, iteration uint, client *helper.Client, connections []con
 
 }
 
-func setup(domain string, groupRegex, fromRegex, toRegex, skipRegex regexSlice) (dom string, connections []connection, err error) {
+func setup(domain string, groupRegex, fromRegex, toRegex, memberRegex, skipRegex regexSlice) (dom string, connections []connection, err error) {
 	client, err := adsi.NewClient()
 	if err != nil {
 		return "", nil, err
@@ -158,6 +167,9 @@ func setup(domain string, groupRegex, fromRegex, toRegex, skipRegex regexSlice) 
 					continue
 				}
 				if !isMatch(from, fromRegex, true) {
+					continue
+				}
+				if !isMatch(from, memberRegex, true) && !isMatch(to, memberRegex, true) {
 					continue
 				}
 

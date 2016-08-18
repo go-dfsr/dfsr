@@ -23,3 +23,12 @@ func (c *connection) ComputeBacklog(client *helper.Client, wg *sync.WaitGroup) {
 	c.BacklogDuration = time.Now().Sub(start)
 	wg.Done()
 }
+
+func (c *connection) TotalBacklog() (backlog uint) {
+	for _, b := range c.Backlog {
+		if b > 0 {
+			backlog += uint(b)
+		}
+	}
+	return
+}
