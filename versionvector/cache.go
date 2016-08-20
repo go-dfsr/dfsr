@@ -75,5 +75,11 @@ func (cache *Cache) Value(guid ole.GUID) (vector *Vector, ok bool) {
 // TODO: Add context after Go 1.7 is released?
 func (cache *Cache) Lookup(guid ole.GUID) (vector *Vector, err error) {
 	v, err := cache.c.Lookup(guid)
+	if err != nil {
+		// Values aren't cached when an error comes back, so it's safe to return
+		// the unduplicated value here. In all likelihood v should be nil here
+		// anwyay.
+		return v.(*Vector), err
+	}
 	return v.(*Vector).Duplicate()
 }
