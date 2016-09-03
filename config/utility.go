@@ -1,6 +1,10 @@
 package config
 
-import "strings"
+import (
+	"strings"
+
+	"gopkg.in/adsi.v0"
+)
 
 func domainPath(dn string) string {
 	return "LDAP://" + dn
@@ -25,4 +29,14 @@ func makeDN(attribute string, components ...string) string {
 
 func combineDN(components ...string) string {
 	return strings.Join(components, ",")
+}
+
+func dnc(client *adsi.Client) (dnc string, err error) {
+	rootDSE, err := client.Open("LDAP://RootDSE")
+	if err != nil {
+		return
+	}
+	defer rootDSE.Close()
+
+	return rootDSE.AttrString("rootDomainNamingContext")
 }

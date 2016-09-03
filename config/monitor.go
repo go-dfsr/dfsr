@@ -23,7 +23,8 @@ type Monitor struct {
 }
 
 // NewMonitor returns a new DFSR configuration monitor that polls Active
-// Directory for updated DFSR configuration.
+// Directory for updated DFSR configuration. If domain is an empty string the
+// monitor will attempt to determine the domain the first time it is started.
 func NewMonitor(domain string, interval time.Duration) *Monitor {
 	m := &Monitor{
 		domain:   domain,
@@ -43,6 +44,10 @@ func (m *Monitor) Close() {
 	if m.pulse == nil {
 		return // Already closed
 	}
+	for _, ch := range m.listeners {
+		close(ch)
+	}
+	m.listeners = nil
 	if m.stop != nil {
 		close(m.stop)
 		m.stop = nil
@@ -67,6 +72,15 @@ func (m *Monitor) Start() error {
 	if err != nil {
 		return err
 	}
+	if m.domain == "" {
+		m.domain, err = dnc(client)
+		if err != nil {
+			return err
+		}
+		if m.domain == "" {
+			return ErrDomainLookupFailed
+		}
+	}
 	m.stop = make(chan struct{})
 	go m.run(client, m.domain, m.interval, m.pulse, m.stop)
 	return nil
@@ -77,10 +91,6 @@ func (m *Monitor) Start() error {
 func (m *Monitor) Stop() {
 	m.mutex.Lock()
 	if m.stop != nil {
-		for _, ch := range m.listeners {
-			close(ch)
-		}
-		m.listeners = nil
 
 		close(m.stop)
 		m.stop = nil
@@ -116,8 +126,7 @@ func (m *Monitor) WaitReady() {
 }
 
 // Listen returns a channel on which configuration updates will be broadcast.
-// The channel will be closed when the monitor is stopped and will not be
-// reopened.
+// The channel will be closed when the monitor is closed.
 func (m *Monitor) Listen() <-chan *core.Domain {
 	ch := make(chan *core.Domain)
 	m.mutex.Lock()
