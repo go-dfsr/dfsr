@@ -47,7 +47,7 @@ func (m *Monitor) Close() {
 		close(m.stop)
 		m.stop = nil
 	}
-	m.pulse = nil // Note: do not close pulse here
+	m.pulse = nil // Note: do not close pulse here because it could trigger an update in run()
 }
 
 // Start starts the configuration monitor. If the monitor is already running
@@ -123,7 +123,7 @@ func (m *Monitor) Listen() <-chan *core.Domain {
 	m.mutex.Lock()
 	m.listeners = append(m.listeners, ch)
 	m.mutex.Unlock()
-	return nil
+	return ch
 }
 
 func (m *Monitor) run(client *adsi.Client, domain string, interval time.Duration, pulse <-chan struct{}, stop <-chan struct{}) {
@@ -179,9 +179,15 @@ func (m *Monitor) stopUpdate() {
 func (m *Monitor) stopUpdateAndApply(updated time.Time, cfg *core.Domain) {
 	m.mutex.Lock()
 
+	hadConfig := (m.cfg != nil)
+
 	m.updated = updated
 	m.cfg = cfg
 	m.updating = false
+
+	if !hadConfig && cfg != nil {
+		m.ready.Done()
+	}
 
 	if len(m.listeners) == 0 {
 		m.mutex.Unlock()
