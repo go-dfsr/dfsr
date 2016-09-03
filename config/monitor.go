@@ -16,8 +16,9 @@ type Monitor struct {
 	cfg       *core.Domain
 	updated   time.Time
 	listeners []chan *core.Domain
-	ready     sync.WaitGroup
+	ready     *sync.WaitGroup
 	updating  bool
+	err       error         // Passes errors to WaitReady()
 	pulse     chan struct{} // Signals update. nil indicates closed.
 	stop      chan struct{} // Signals stop. nil indicates stopped.
 }
@@ -30,6 +31,7 @@ func NewMonitor(domain string, interval time.Duration) *Monitor {
 		domain:   domain,
 		interval: interval,
 		pulse:    make(chan struct{}),
+		ready:    new(sync.WaitGroup),
 	}
 	m.ready.Add(1)
 	return m
@@ -121,8 +123,18 @@ func (m *Monitor) Config() (cfg *core.Domain) {
 
 // WaitReady blocks until the monitor has retrieved configuration data. If the
 // monitor has already retrieved data the call will not block.
-func (m *Monitor) WaitReady() {
-	m.ready.Wait()
+func (m *Monitor) WaitReady() (err error) {
+	m.mutex.RLock()
+	rdy := m.ready
+	m.mutex.RUnlock()
+
+	rdy.Wait()
+
+	m.mutex.RLock()
+	err = m.err
+	m.mutex.RUnlock()
+
+	return
 }
 
 // Listen returns a channel on which configuration updates will be broadcast.
@@ -161,12 +173,11 @@ func (m *Monitor) update(client *adsi.Client, domain string) {
 	cfg, err := Domain(client, domain)
 
 	if err != nil {
-		m.stopUpdate()
-		// FIXME: Do something with the error, like sending it to a logger or a channel
+		m.stopUpdateAfterError(err)
 		return
 	}
 
-	m.stopUpdateAndApply(updated, &cfg)
+	m.stopUpdateAfterSuccess(updated, &cfg)
 }
 
 func (m *Monitor) startUpdate() (acquired bool) {
@@ -179,13 +190,24 @@ func (m *Monitor) startUpdate() (acquired bool) {
 	return
 }
 
-func (m *Monitor) stopUpdate() {
+func (m *Monitor) stopUpdateAfterError(err error) {
 	m.mutex.Lock()
+
+	hasConfig := (m.cfg != nil)
 	m.updating = false
+
+	if !hasConfig {
+		m.err = err
+		m.ready.Done()
+		m.ready = new(sync.WaitGroup)
+	}
+
+	// TODO: Do something with the error, like sending it to a logger or a channel
+
 	m.mutex.Unlock()
 }
 
-func (m *Monitor) stopUpdateAndApply(updated time.Time, cfg *core.Domain) {
+func (m *Monitor) stopUpdateAfterSuccess(updated time.Time, cfg *core.Domain) {
 	m.mutex.Lock()
 
 	hadConfig := (m.cfg != nil)
@@ -195,6 +217,7 @@ func (m *Monitor) stopUpdateAndApply(updated time.Time, cfg *core.Domain) {
 	m.updating = false
 
 	if !hadConfig && cfg != nil {
+		m.err = nil
 		m.ready.Done()
 	}
 
