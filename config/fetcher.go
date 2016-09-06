@@ -440,6 +440,11 @@ func (fetch *fetcher) connection(c *adsi.Object) (conn core.Connection, err erro
 		return
 	}
 
+	conn.Enabled, err = c.AttrBool("msDFSR-Enabled")
+	if err != nil {
+		return
+	}
+
 	mi, err := fetch.MemberInfo(conn.MemberDN)
 	if err != nil {
 		return

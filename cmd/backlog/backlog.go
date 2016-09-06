@@ -163,6 +163,9 @@ func setup(domain string, groupRegex, fromRegex, toRegex, memberRegex, skipRegex
 				if from == "" {
 					continue
 				}
+				if !conn.Enabled {
+					continue
+				}
 				if isMatch(from, skipRegex, false) {
 					continue
 				}

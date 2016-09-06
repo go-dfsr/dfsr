@@ -62,6 +62,7 @@ type Connection struct {
 	Name     string
 	ID       *ole.GUID
 	MemberDN string
+	Enabled  bool
 	Computer Computer // Distinguished name of source member in topology, matches DN field of that Member
 }
 
