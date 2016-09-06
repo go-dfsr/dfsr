@@ -64,3 +64,13 @@ type Connection struct {
 	MemberDN string
 	Computer Computer // Distinguished name of source member in topology, matches DN field of that Member
 }
+
+// Backlog represents the backlog from one DFSR member to another.
+type Backlog struct {
+	Group    *Group
+	From     string
+	To       string
+	Backlog  []int
+	Err      error
+	Duration time.Duration // Wall time for backlog calculation
+}
