@@ -11,7 +11,7 @@ type Source interface {
 	Close() // TODO: Consider removing this and doing a runtime type check for io.Closer
 }
 
-// Poller represents a single monitor instance created with a call to Start.
+// Poller executes a polling function on an interval.
 type Poller struct {
 	mutex    sync.Mutex
 	interval time.Duration
@@ -37,7 +37,7 @@ func New(source Source, interval time.Duration) *Poller {
 }
 
 // Close causes the poller to stop polling and release any resources consumed
-// by the poller.
+// by the poller. It will also call the close function on the polling source.
 func (p *Poller) Close() {
 	p.mutex.Lock()
 	// Don't defer p.mutex.Unlock() here because that would mess up sync.Cond.Wait
