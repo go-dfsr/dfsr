@@ -68,10 +68,11 @@ type Connection struct {
 
 // Backlog represents the backlog from one DFSR member to another.
 type Backlog struct {
-	Group    *Group
-	From     string
-	To       string
-	Backlog  []int
-	Err      error
-	Duration time.Duration // Wall time for backlog calculation
+	Group     *Group
+	From      string
+	To        string
+	Backlog   []int
+	Timestamp time.Time
+	Duration  time.Duration // Wall time for backlog calculation
+	Err       error
 }
