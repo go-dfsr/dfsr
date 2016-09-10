@@ -37,7 +37,8 @@ func New(source Source, interval time.Duration) *Poller {
 }
 
 // Close causes the poller to stop polling and release any resources consumed
-// by the poller. It will also call the close function on the polling source.
+// by the poller. It will implicitly call the close function on the polling
+// source.
 func (p *Poller) Close() {
 	p.mutex.Lock()
 	// Don't defer p.mutex.Unlock() here because that would mess up sync.Cond.Wait
