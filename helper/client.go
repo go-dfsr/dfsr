@@ -17,6 +17,8 @@ type Client struct {
 	m             sync.RWMutex
 	caching       bool
 	cacheDuration time.Duration
+	limiting      bool
+	limit         int
 	servers       map[string]Reporter // Maps lower-case FQDNs to the Reporter inferface for each server
 }
 
@@ -28,25 +30,39 @@ func NewClient() (*Client, error) {
 	}, nil
 }
 
-// NewCachingClient creates a new Client that is capable of querying DFSR
-// members via the DFSR Helper protocol. The returned Client will cache version
-// vectors for the given cache duration.
-func NewCachingClient(cacheDuration time.Duration) (*Client, error) {
-	return &Client{
-		caching:       true,
-		cacheDuration: cacheDuration,
-		servers:       make(map[string]Reporter),
-	}, nil
+// Cache instructs the client to cache retrieved version vectors for the given
+// duration.
+//
+// Cache must be called before calling any of the client query functions.
+func (c *Client) Cache(duration time.Duration) {
+	c.m.Lock()
+	c.caching = true
+	c.cacheDuration = duration
+	c.m.Unlock()
+}
+
+// Limit instructs the client to limit the maximum number of simultaneous
+// workers that will talk to a server.
+//
+// Limit must be called before calling any of the client query functions.
+func (c *Client) Limit(workers int) {
+	c.m.Lock()
+	c.limiting = true
+	c.limit = workers
+	c.m.Unlock()
 }
 
 // Close will release any resources consumed by the Client.
 func (c *Client) Close() {
 	c.m.Lock()
-	defer c.m.Lock()
+	defer c.m.Unlock()
+	if c.servers == nil {
+		return // Already closed
+	}
 	for _, r := range c.servers {
 		r.Close()
 	}
-	c.servers = make(map[string]Reporter)
+	c.servers = nil
 }
 
 // Backlog returns the outgoing backlog from one DSFR member to another. The
@@ -96,14 +112,29 @@ func (c *Client) Report(server string, group *ole.GUID, vector *versionvector.Ve
 
 func (c *Client) server(fqdn string) (r Reporter, err error) {
 	fqdn = strings.ToLower(fqdn)
+
+	// Existing entries
 	c.m.RLock()
+	if c.servers == nil {
+		c.m.RUnlock()
+		return nil, ErrClosed
+	}
 	r, found := c.servers[fqdn]
 	c.m.RUnlock()
 	if found {
 		return r, nil
 	}
+
+	// New entries
 	c.m.Lock()
 	defer c.m.Unlock()
+	if c.servers == nil {
+		return nil, ErrClosed
+	}
+	r, found = c.servers[fqdn]
+	if found {
+		return r, nil
+	}
 	r, err = c.create(fqdn)
 	if err != nil {
 		return
@@ -117,9 +148,11 @@ func (c *Client) create(fqdn string) (r Reporter, err error) {
 	if err != nil {
 		return
 	}
-	r, err = NewLimiter(r, 1)
-	if err != nil {
-		return
+	if c.limiting {
+		r, err = NewLimiter(r, c.limit)
+		if err != nil {
+			return
+		}
 	}
 	if c.caching {
 		r = NewCacher(r, c.cacheDuration)

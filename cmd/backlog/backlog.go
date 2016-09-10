@@ -54,14 +54,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var client *helper.Client
-	if cacheSecondsFlag > 0 {
-		client, err = helper.NewCachingClient(time.Duration(cacheSecondsFlag) * time.Second)
-	} else {
-		client, err = helper.NewClient()
-	}
+	client, err := helper.NewClient()
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if cacheSecondsFlag > 0 {
+		client.Cache(time.Duration(cacheSecondsFlag) * time.Second)
 	}
 
 	if loopFlag.Inf {
