@@ -24,7 +24,7 @@ type limiter struct {
 // The returned Reporter pushes queries onto work queues that are fed into the
 // work pools of a configurable number of workers. Its purpose is to limit the
 // amount work pressure that is exerted on a particular server.
-func NewLimiter(r Reporter, numWorkers int) (limited Reporter, err error) {
+func NewLimiter(r Reporter, numWorkers uint) (limited Reporter, err error) {
 	vwp, err := newVectorWorkPool(numWorkers, r)
 	if err != nil {
 		return nil, err

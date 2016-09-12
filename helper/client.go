@@ -18,7 +18,7 @@ type Client struct {
 	caching       bool
 	cacheDuration time.Duration
 	limiting      bool
-	limit         int
+	limit         uint
 	servers       map[string]Reporter // Maps lower-case FQDNs to the Reporter inferface for each server
 }
 
@@ -45,7 +45,7 @@ func (c *Client) Cache(duration time.Duration) {
 // workers that will talk to a server.
 //
 // Limit must be called before calling any of the client query functions.
-func (c *Client) Limit(workers int) {
+func (c *Client) Limit(workers uint) {
 	c.m.Lock()
 	c.limiting = true
 	c.limit = workers

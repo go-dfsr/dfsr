@@ -10,9 +10,12 @@ type vectorWorkPool struct {
 	p *tunny.WorkPool
 }
 
-func newVectorWorkPool(numWorkers int, r Reporter) (pool *vectorWorkPool, err error) {
+func newVectorWorkPool(numWorkers uint, r Reporter) (pool *vectorWorkPool, err error) {
+	if numWorkers == 0 {
+		return nil, ErrZeroWorkers
+	}
 	workers := make([]tunny.TunnyWorker, 0, numWorkers)
-	for i := 0; i < numWorkers; i++ {
+	for i := uint(0); i < numWorkers; i++ {
 		workers = append(workers, &vectorWorker{r: r})
 	}
 	p, err := tunny.CreateCustomPool(workers).Open()
