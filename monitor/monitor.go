@@ -18,17 +18,27 @@ type Monitor struct {
 	mutex    sync.Mutex
 	source   Source
 	interval time.Duration
+	cache    time.Duration
+	limit    uint
 	instance *poller.Poller
 	closed   bool
 }
 
 // New creates a new Monitor with the given source and polling interval.
 //
+// If cache is nonzero then the monitor will cache version vectors for
+// the given duration.
+//
+// If limit is nonzero then the monitor will limit the number of active
+// queries to an individual DFSR member to the given value.
+//
 // The returned monitor will not function until start is called.
-func New(source Source, interval time.Duration) *Monitor {
+func New(source Source, interval time.Duration, cache time.Duration, limit uint) *Monitor {
 	return &Monitor{
 		source:   source,
 		interval: interval,
+		cache:    cache,
+		limit:    limit,
 	}
 }
 
@@ -70,8 +80,12 @@ func (m *Monitor) Start() error {
 	if err != nil {
 		return err
 	}
-	client.Cache(45 * time.Second)
-	client.Limit(1)
+	if m.cache > time.Duration(0) {
+		client.Cache(m.cache)
+	}
+	if m.limit > 0 {
+		client.Limit(m.limit)
+	}
 
 	m.instance = poller.New(&worker{
 		client: client,
