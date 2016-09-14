@@ -87,9 +87,13 @@ func (bc *backlogBroadcaster) Broadcast(backlog *core.Backlog) {
 }
 
 func sendBacklog(backlog *core.Backlog, c chan<- *core.Backlog, timeout time.Duration, wg *sync.WaitGroup) {
-	select {
-	case c <- backlog:
-	case <-time.After(timeout):
+	if timeout == 0 {
+		c <- backlog
+	} else {
+		select {
+		case c <- backlog:
+		case <-time.After(timeout):
+		}
 	}
 	wg.Done()
 }
