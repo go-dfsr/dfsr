@@ -122,7 +122,23 @@ func (m *Monitor) Update() {
 }
 
 // Listen returns a channel on which DFSR backlog values will be broadcast.
-// The channel will be closed when the monitor is closed.
-func (m *Monitor) Listen() <-chan *core.Backlog {
-	return m.bc.Listen()
+// The channel will be closed when the monitor is closed or when unlisten is
+// called for the returned channel.
+//
+// The returned channel will use the provided buffer size.
+//
+// Channel sends are permitted to block until the provided timeout is exceeded,
+// at which point the backlog updates may be skipped. A timeout value of zero
+// indicates to the monitor that channel sends are permitted to block
+// indefinitely.
+func (m *Monitor) Listen(chanSize int, timeout time.Duration) <-chan *core.Backlog {
+	return m.bc.Listen(chanSize, timeout)
+}
+
+// Unlisten closes the given listener's channel and removes it from the set of
+// listeners that receive DFSR backlog values.
+//
+// Unlisten returns false if the listener was not present.
+func (m *Monitor) Unlisten(c <-chan *core.Backlog) (found bool) {
+	return m.bc.Unlisten(c)
 }
