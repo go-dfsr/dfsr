@@ -159,8 +159,11 @@ func (cache *Cache) Value(key Key) (value Value, ok bool) {
 // a read lock on the cache during the call.
 func (cache *Cache) value(k Key) (value Value, ok bool) {
 	entry, found := cache.data[k]
-	if found && entry.Timestamp.Add(cache.d).Before(time.Now()) {
-		return entry.Value, true
+	if found {
+		expiration := entry.Timestamp.Add(cache.d)
+		if expiration.After(time.Now()) {
+			return entry.Value, true
+		}
 	}
 	return nil, false
 }
@@ -265,10 +268,13 @@ func (cache *Cache) spawnCleanup() {
 // cache over time. It runs until the cache is empty, at which point it exits.
 func (cache *Cache) cleanup(next time.Time) {
 	var more bool
-	now := time.Now()
 	for {
-		<-time.After(next.Sub(now))
-		now = time.Now()
+		now := time.Now()
+		if next.After(now) {
+			remaining := next.Sub(now)
+			<-time.After(remaining)
+			now = time.Now()
+		}
 		cache.m.Lock()
 		next, more = cache.validate(now)
 		if !more {
@@ -287,15 +293,17 @@ func (cache *Cache) cleanup(next time.Time) {
 // maintain a read/write lock on the cache during the call.
 func (cache *Cache) validate(now time.Time) (next time.Time, more bool) {
 	for len(cache.log) > 0 {
-		next := cache.log[0].Timestamp.Add(cache.d)
-		if now.Before(next) {
-			return next, true
+		expiration := cache.log[0].Timestamp.Add(cache.d)
+		if expiration.After(now) {
+			return expiration, true
 		}
 
 		k := cache.log[0].Key
 		entry, found := cache.data[k]
 		if found {
-			expiration := entry.Timestamp.Add(cache.d)
+			// The expiration in the cache could be more recent than the log entry
+			// we're processing, so it's important that we check it again.
+			expiration = entry.Timestamp.Add(cache.d)
 			if expiration.Before(now) {
 				release(entry.Value)
 				delete(cache.data, k)
