@@ -41,9 +41,10 @@ func (c *Consumer) run() {
 		if !ok {
 			return
 		}
-		if backlog.Err == nil {
-			c.send(backlog)
+		if !reportable(backlog) {
+			continue
 		}
+		c.send(backlog)
 	}
 }
 
@@ -73,4 +74,24 @@ func nonFQDN(fqdn string) string {
 		return strings.ToUpper(fqdn)
 	}
 	return strings.ToUpper(fqdn[0:dot])
+}
+
+func reportable(backlog *core.Backlog) bool {
+	if backlog.Err != nil {
+		return false
+	}
+
+	if len(backlog.Backlog) == 0 {
+		// Indicates replication group query error
+		return false
+	}
+
+	for _, value := range backlog.Backlog {
+		if value < 0 {
+			// Indicates per-folder query error
+			return false
+		}
+	}
+
+	return true
 }
