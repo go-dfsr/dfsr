@@ -473,7 +473,7 @@ func (gs *GlobalSettings) connection(c *adsi.Object) (conn core.Connection, err 
 		return
 	}
 
-	if class == "msDFSR-Member" {
+	if class == "msDFSR-Connection" {
 		// Standard DFSR connection
 		conn.Enabled, err = c.AttrBool("msDFSR-Enabled")
 		if err != nil {
