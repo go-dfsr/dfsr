@@ -45,7 +45,11 @@ func main() {
 			fmt.Printf("          Member: %-47s ID: %v Computer: %s\n", member.Name, member.ID, member.Computer.Host)
 			for c := 0; c < len(member.Connections); c++ {
 				conn := &member.Connections[c]
-				fmt.Printf("            Connection: %-41s ID: %v Computer: %s\n", conn.Name, conn.ID, conn.Computer.Host)
+				enabledMark := " "
+				if conn.Enabled {
+					enabledMark = "x"
+				}
+				fmt.Printf("            Connection[%s]: %-39s ID: %v Computer: %s\n", enabledMark, conn.Name, conn.ID, conn.Computer.Host)
 			}
 		}
 	}
