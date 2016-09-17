@@ -1,4 +1,4 @@
-package config
+package globalsettings
 
 import "gopkg.in/dfsr.v0/core"
 

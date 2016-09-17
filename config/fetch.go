@@ -1,43 +1,21 @@
 package config
 
 import (
-	"github.com/go-ole/go-ole"
 	"gopkg.in/adsi.v0"
+	"gopkg.in/dfsr.v0/config/globalsettings"
 	"gopkg.in/dfsr.v0/core"
 )
 
 // Domain will fetch DFSR configuration data from the specified domain using the
 // provided ADSI client.
 func Domain(client *adsi.Client, domain string) (data core.Domain, err error) {
-	fetch, err := newFetcher(client, domain)
-	if err != nil {
-		return
-	}
-	defer fetch.Close()
-
-	return fetch.Domain()
+	gs := globalsettings.New(client, domain)
+	return gs.Domain()
 }
 
 // Group will fetch DFSR configuration data for the replication group in the
 // specified domain that matches the given name using the provided ADSI client.
 func Group(client *adsi.Client, domain, groupName string) (data core.Group, err error) {
-	fetch, err := newFetcher(client, domain)
-	if err != nil {
-		return
-	}
-	defer fetch.Close()
-
-	return fetch.GroupByName(groupName)
-}
-
-// GroupByGUID will fetch DFSR configuration data for the requested replication
-// group in the specified domain using the provided ADSI client.
-func GroupByGUID(client *adsi.Client, domain string, group *ole.GUID) (data core.Group, err error) {
-	fetch, err := newFetcher(client, domain)
-	if err != nil {
-		return
-	}
-	defer fetch.Close()
-
-	return fetch.GroupByGUID(group)
+	gs := globalsettings.New(client, domain)
+	return gs.GroupByName(groupName)
 }
