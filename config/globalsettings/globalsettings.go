@@ -334,11 +334,20 @@ func (gs *GlobalSettings) member(m *adsi.Object, dn string) (member core.Member,
 		return
 	}
 
-	member.Connections, err = gs.connections(m)
+	serverref, _ := m.AttrString("serverReference")
+	if serverref == "" {
+		// Standard DFSR membership
+		member.Connections, err = gs.connections(m)
+		return
+	}
+
+	// Domain System Volume membership
+	server, err := gs.client.Open(ldap(serverref))
 	if err != nil {
 		return
 	}
 
+	member.Connections, err = gs.connections(server)
 	return
 }
 
@@ -372,6 +381,32 @@ func (gs *GlobalSettings) memberInfo(m *adsi.Object, dn string) (member core.Mem
 		member.DN = dn
 	}
 
+	class, err := m.Class()
+	if err != nil {
+		return
+	}
+
+	var compref string
+	switch class {
+	case "nTDSDSA":
+		m, err = gs.openParent(m)
+		defer m.Close()
+		fallthrough
+	case "server":
+		compref, err = m.AttrString("serverReference")
+		if err != nil {
+			return
+		}
+	case "msDFSR-Member":
+		compref, err = m.AttrString("msDFSR-ComputerReference")
+		if err != nil {
+			return
+		}
+	default:
+		err = errors.New("Unknown Active Directory membership class")
+		return
+	}
+
 	member.Name, err = m.Name()
 	if err != nil {
 		return
@@ -379,11 +414,6 @@ func (gs *GlobalSettings) memberInfo(m *adsi.Object, dn string) (member core.Mem
 	member.Name = strings.TrimPrefix(member.Name, "CN=")
 
 	member.ID, err = m.GUID()
-	if err != nil {
-		return
-	}
-
-	compref, err := m.AttrString("msDFSR-ComputerReference")
 	if err != nil {
 		return
 	}
@@ -422,6 +452,11 @@ func (gs *GlobalSettings) connections(member *adsi.Object) (connections []core.C
 }
 
 func (gs *GlobalSettings) connection(c *adsi.Object) (conn core.Connection, err error) {
+	class, err := c.Class()
+	if err != nil {
+		return
+	}
+
 	conn.Name, err = c.Name()
 	if err != nil {
 		return
@@ -438,9 +473,15 @@ func (gs *GlobalSettings) connection(c *adsi.Object) (conn core.Connection, err 
 		return
 	}
 
-	conn.Enabled, err = c.AttrBool("msDFSR-Enabled")
-	if err != nil {
-		return
+	if class == "msDFSR-Member" {
+		// Standard DFSR connection
+		conn.Enabled, err = c.AttrBool("msDFSR-Enabled")
+		if err != nil {
+			return
+		}
+	} else if class == "nTDSConnection" {
+		// Domain System Volume membership
+		conn.Enabled = true // These members are always enabled
 	}
 
 	mi, err := gs.MemberInfo(conn.MemberDN)
@@ -469,6 +510,7 @@ func (gs *GlobalSettings) computer(c *adsi.Object) (computer core.Computer, err 
 	if err != nil {
 		return
 	}
+	computer.DN = strings.TrimPrefix(computer.DN, "LDAP://")
 
 	computer.Host, err = c.AttrString("dNSHostName")
 	if err != nil {
@@ -476,6 +518,15 @@ func (gs *GlobalSettings) computer(c *adsi.Object) (computer core.Computer, err 
 	}
 
 	return
+}
+
+func (gs *GlobalSettings) openParent(o *adsi.Object) (parent *adsi.Object, err error) {
+	path, err := o.Parent()
+	if err != nil {
+		return
+	}
+
+	return gs.client.Open(path)
 }
 
 func (gs *GlobalSettings) openContainer(partialDN string) (*adsi.Container, error) {
