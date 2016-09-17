@@ -19,10 +19,10 @@ type NamingContext struct {
 type Domain struct {
 	NamingContext
 	Groups         []Group
-	Sysvol         []Member
 	ConfigDuration time.Duration // Time elapsed while retrieving configuration
 }
 
+/*
 // Site represents an Active Directory site.
 type Site struct {
 	Name           string
@@ -30,6 +30,7 @@ type Site struct {
 	Members        []Member
 	ConfigDuration time.Duration // Time elapsed while retrieving configuration
 }
+*/
 
 // Group represents a replication group.
 type Group struct {
