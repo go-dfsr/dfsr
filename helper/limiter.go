@@ -11,7 +11,7 @@ var _ = (Reporter)((*limiter)(nil)) // Compile-time interface compliance check
 // wraps an underyling Reporter.
 //
 // limiter pushes queries onto work queues that are fed into work pools of
-// a configurable number of workers. Its purpose is to limit the amount work
+// a configurable number of workers. Its purpose is to limit the amount of work
 // pressure that is exerted on a particular server.
 type limiter struct {
 	r   Reporter
@@ -21,9 +21,9 @@ type limiter struct {
 // NewLimiter adds a work pool to the given Reporter. The number of workers
 // is specified by numWorkers.
 //
-// The returned Reporter pushes queries onto work queues that are fed into the
-// work pools of a configurable number of workers. Its purpose is to limit the
-// amount work pressure that is exerted on a particular server.
+// The returned Reporter pushes queries onto work queues that are fed into work
+// pools of a configurable number of workers. Its purpose is to limit the amount
+// of work pressure that is exerted on a particular server.
 func NewLimiter(r Reporter, numWorkers uint) (limited Reporter, err error) {
 	vwp, err := newVectorWorkPool(numWorkers, r)
 	if err != nil {
