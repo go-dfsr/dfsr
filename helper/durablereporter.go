@@ -132,5 +132,6 @@ func (r *durableReporter) recover(reporter Reporter) (err error) {
 		go r.r.Close()
 		r.r = reporter
 	}
+	r.lastRecovery = time.Now()
 	return
 }
