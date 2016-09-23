@@ -14,19 +14,23 @@ import (
 // and attempts to manage DFSR queries in such a way that they do not overburden
 // the target servers.
 type Client struct {
-	m             sync.RWMutex
-	caching       bool
-	cacheDuration time.Duration
-	limiting      bool
-	limit         uint
-	servers       map[string]Reporter // Maps lower-case FQDNs to the Reporter inferface for each server
+	m                sync.RWMutex
+	caching          bool
+	cacheDuration    time.Duration
+	limiting         bool
+	limit            uint
+	durable          bool
+	recoveryInterval time.Duration
+	retries          uint
+	servers          map[string]Reporter // Maps lower-case FQDNs to the Reporter inferface for each server
 }
 
 // NewClient creates a new Client that is capable of querying DFSR members via
 // the DFSR Helper protocol. The returned Client will not cache version vectors.
 func NewClient() (*Client, error) {
 	return &Client{
-		servers: make(map[string]Reporter),
+		recoveryInterval: DefaultRecoveryInterval,
+		servers:          make(map[string]Reporter),
 	}, nil
 }
 
@@ -49,6 +53,33 @@ func (c *Client) Limit(workers uint) {
 	c.m.Lock()
 	c.limiting = true
 	c.limit = workers
+	c.m.Unlock()
+}
+
+// Recovery instructs the client to attempt to recover from failed RPC
+// connections by closing and reopening them when an error occurs. The provided
+// interval specifies the minimum time that must pass between reconnection
+// attempts.
+//
+// Recovery must be called before calling any of the client query functions.
+func (c *Client) Recovery(interval time.Duration) {
+	c.m.Lock()
+	c.durable = true
+	c.recoveryInterval = interval
+	c.m.Unlock()
+}
+
+// Retries instructs the client to retry failed calls the specified number of
+// times, which may be zero.
+//
+// Retries must be called before calling any of the client query functions.
+//
+// Calling retries without calling recovery implies recovery with an interval of
+// DefaultRecoveryInterval.
+func (c *Client) Retries(retries uint) {
+	c.m.Lock()
+	c.durable = true
+	c.retries = retries
 	c.m.Unlock()
 }
 
@@ -144,7 +175,11 @@ func (c *Client) server(fqdn string) (r Reporter, err error) {
 }
 
 func (c *Client) create(fqdn string) (r Reporter, err error) {
-	r, err = NewReporter(fqdn)
+	if c.durable {
+		r, err = NewDurableReporter(fqdn, c.recoveryInterval, c.retries)
+	} else {
+		r, err = NewReporter(fqdn)
+	}
 	if err != nil {
 		return
 	}

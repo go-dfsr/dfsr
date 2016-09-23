@@ -80,6 +80,7 @@ func (m *Monitor) Start() error {
 	if err != nil {
 		return err
 	}
+	client.Recovery(helper.DefaultRecoveryInterval)
 	if m.cache > time.Duration(0) {
 		client.Cache(m.cache)
 	}

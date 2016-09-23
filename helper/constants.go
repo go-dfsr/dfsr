@@ -1,6 +1,15 @@
 package helper
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
+
+const (
+	// DefaultRecoveryInterval specifies the default recovery interval for
+	// client instances.
+	DefaultRecoveryInterval = time.Second * 30
+)
 
 var (
 	// ErrClosed is returned from calls to a service or interface in the event
