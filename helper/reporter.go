@@ -7,6 +7,7 @@ import (
 	"github.com/go-ole/go-ole"
 	"github.com/scjalliance/comshim"
 
+	"gopkg.in/dfsr.v0/callstat"
 	"gopkg.in/dfsr.v0/helper/api"
 	"gopkg.in/dfsr.v0/versionvector"
 )
@@ -16,9 +17,9 @@ import (
 // All implementations of the Reporter interface must be threadsafe.
 type Reporter interface {
 	Close()
-	Vector(group ole.GUID) (vector *versionvector.Vector, err error)
-	Backlog(vector *versionvector.Vector) (backlog []int, err error)
-	Report(group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, err error)
+	Vector(group ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error)
+	Backlog(vector *versionvector.Vector) (backlog []int, call callstat.Call, err error)
+	Report(group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error)
 }
 
 var _ = (Reporter)((*reporter)(nil)) // Compile-time interface compliance check
@@ -68,48 +69,68 @@ func (r *reporter) Close() {
 
 // Vector returns the reference version vectors for the requested replication
 // group.
-func (r *reporter) Vector(group ole.GUID) (vector *versionvector.Vector, err error) {
+func (r *reporter) Vector(group ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error) {
 	r.m.Lock()
 	defer r.m.Unlock()
+	call.Begin("Reporter.Vector")
+	defer call.Complete(err)
+
 	if r.closed() {
-		return nil, ErrClosed
+		err = ErrClosed
+		return
 	}
+
 	// TODO: Check dimensions of the returned vectors for sanity
 	sa, err := r.iface.GetReferenceVersionVectors(group)
 	if err != nil {
 		return
 	}
-	return versionvector.New(sa)
+
+	vector, err = versionvector.New(sa)
+	return
 }
 
 // Backlog returns the current backlog when compared against the given
 // reference version vector.
-func (r *reporter) Backlog(vector *versionvector.Vector) (backlog []int, err error) {
+func (r *reporter) Backlog(vector *versionvector.Vector) (backlog []int, call callstat.Call, err error) {
 	r.m.Lock()
 	defer r.m.Unlock()
+	call.Begin("Reporter.Backlog")
+	defer call.Complete(err)
+
 	if r.closed() {
-		return nil, ErrClosed
+		err = ErrClosed
+		return
 	}
+
 	// TODO: Check dimensions of the returned backlog for sanity
 	sa, err := r.iface.GetReferenceBacklogCounts(vector.Data())
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	return makeBacklog(sa), nil
+	backlog = makeBacklog(sa)
+	return
 }
 
 // Report generates a report when compared against the given
 // reference version vector.
-func (r *reporter) Report(group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, err error) {
+func (r *reporter) Report(group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
 	if backlog && vector == nil {
-		return nil, "", errors.New("Backlog reports require that a reference member vector is provided.")
+		call.Description = "Reporter.Report"
+		err = errors.New("Backlog reports require that a reference member vector is provided.")
+		call.Complete(err)
+		return
 	}
 
 	r.m.Lock()
 	defer r.m.Unlock()
+	call.Begin("Reporter.Report")
+	defer call.Complete(err)
+
 	if r.closed() {
-		return nil, "", ErrClosed
+		err = ErrClosed
+		return
 	}
 	// TODO: Check dimensions of the returned backlog for sanity
 
@@ -121,8 +142,11 @@ func (r *reporter) Report(group *ole.GUID, vector *versionvector.Vector, backlog
 		flags |= api.REPORTING_FLAGS_FILES
 	}
 
+	var vdata *ole.SafeArrayConversion
 	if backlog {
-		return r.iface.GetReport(*group, "", vector.Data(), int32(flags))
+		vdata = vector.Data()
 	}
-	return r.iface.GetReport(*group, "", nil, int32(flags))
+
+	data, report, err = r.iface.GetReport(*group, "", vdata, int32(flags))
+	return
 }

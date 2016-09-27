@@ -3,6 +3,7 @@ package helper
 import (
 	"github.com/Jeffail/tunny"
 	"github.com/go-ole/go-ole"
+	"gopkg.in/dfsr.v0/callstat"
 	"gopkg.in/dfsr.v0/versionvector"
 )
 
@@ -25,7 +26,7 @@ func newVectorWorkPool(numWorkers uint, r Reporter) (pool *vectorWorkPool, err e
 	return &vectorWorkPool{p: p}, nil
 }
 
-func (vwp *vectorWorkPool) Vector(group ole.GUID) (vector *versionvector.Vector, err error) {
+func (vwp *vectorWorkPool) Vector(group ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error) {
 	v, err := vwp.p.SendWork(group)
 	if err != nil {
 		return
@@ -36,7 +37,7 @@ func (vwp *vectorWorkPool) Vector(group ole.GUID) (vector *versionvector.Vector,
 		panic("invalid work result")
 	}
 
-	return result.Vector, result.Err
+	return result.Vector, result.Call, result.Err
 }
 
 func (vwp *vectorWorkPool) Close() {
@@ -45,6 +46,7 @@ func (vwp *vectorWorkPool) Close() {
 
 type vectorWorkResult struct {
 	Vector *versionvector.Vector
+	Call   callstat.Call
 	Err    error
 }
 
@@ -59,11 +61,9 @@ func (vw *vectorWorker) TunnyReady() bool {
 func (vw *vectorWorker) TunnyJob(data interface{}) interface{} {
 	guid, ok := data.(ole.GUID)
 	if ok {
-		vector, err := vw.r.Vector(guid)
-		return &vectorWorkResult{
-			Vector: vector,
-			Err:    err,
-		}
+		var result vectorWorkResult
+		result.Vector, result.Call, result.Err = vw.r.Vector(guid)
+		return &result
 	}
 	return nil
 }

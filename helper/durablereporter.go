@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/go-ole/go-ole"
+	"gopkg.in/dfsr.v0/callstat"
 	"gopkg.in/dfsr.v0/versionvector"
 )
 
@@ -35,7 +36,7 @@ type durableReporter struct {
 // of retries, which may be zero. These retries will block the call until
 // a successful result is returned or the maximum number of retries has been
 // reached.
-func NewDurableReporter(server string, interval time.Duration, retries uint) (recovering Reporter, err error) {
+func NewDurableReporter(server string, interval time.Duration, retries uint) (reporter Reporter, err error) {
 	r, err := NewReporter(server)
 	if err != nil {
 		return nil, err
@@ -50,25 +51,40 @@ func NewDurableReporter(server string, interval time.Duration, retries uint) (re
 	}, nil
 }
 
-func (r *durableReporter) Vector(group ole.GUID) (vector *versionvector.Vector, err error) {
+func (r *durableReporter) Vector(group ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error) {
+	call.Begin("DurableReporter.Vector")
+	defer call.Complete(err)
+
 	err = r.attempt(func(reporter Reporter) error {
-		vector, err = reporter.Vector(group)
+		var subcall callstat.Call
+		vector, subcall, err = reporter.Vector(group)
+		call.Add(&subcall)
 		return err
 	})
 	return
 }
 
-func (r *durableReporter) Backlog(vector *versionvector.Vector) (backlog []int, err error) {
+func (r *durableReporter) Backlog(vector *versionvector.Vector) (backlog []int, call callstat.Call, err error) {
+	call.Begin("DurableReporter.Backlog")
+	defer call.Complete(err)
+
 	err = r.attempt(func(reporter Reporter) error {
-		backlog, err = reporter.Backlog(vector)
+		var subcall callstat.Call
+		backlog, subcall, err = reporter.Backlog(vector)
+		call.Add(&subcall)
 		return err
 	})
 	return
 }
 
-func (r *durableReporter) Report(group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, err error) {
+func (r *durableReporter) Report(group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
+	call.Begin("DurableReporter.Report")
+	defer call.Complete(err)
+
 	err = r.attempt(func(reporter Reporter) error {
-		data, report, err = reporter.Report(group, vector, backlog, files)
+		var subcall callstat.Call
+		data, report, subcall, err = reporter.Report(group, vector, backlog, files)
+		call.Add(&subcall)
 		return err
 	})
 	return

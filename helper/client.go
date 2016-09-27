@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/go-ole/go-ole"
+	"gopkg.in/dfsr.v0/callstat"
 	"gopkg.in/dfsr.v0/versionvector"
 )
 
@@ -99,46 +100,62 @@ func (c *Client) Close() {
 // Backlog returns the outgoing backlog from one DSFR member to another. The
 // backlog of each replicated folder within the requested group is returned.
 // The members are identified by their fully qualified domain names.
-func (c *Client) Backlog(from, to string, group ole.GUID) (backlog []int, err error) {
+func (c *Client) Backlog(from, to string, group ole.GUID) (backlog []int, call callstat.Call, err error) {
+	call.Begin("Client.Backlog")
+	defer call.Complete(err)
+
 	f, err := c.server(from)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	t, err := c.server(to)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	v, err := t.Vector(group)
+	v, vcall, err := t.Vector(group)
+	call.Add(&vcall)
 	if err != nil {
-		return nil, err
+		return
 	}
 	defer v.Close()
 
-	return f.Backlog(v)
+	backlog, bcall, err := f.Backlog(v)
+	call.Add(&bcall)
+	return
 }
 
 // Vector returns the current referece version vector for the specified
 // replication group on requested DFSR member. The member is identified by its
 // fully qualified domain name.
-func (c *Client) Vector(server string, group *ole.GUID) (vector *versionvector.Vector, err error) {
+func (c *Client) Vector(server string, group *ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error) {
+	call.Begin("Client.Vector")
+	defer call.Complete(err)
+
 	s, err := c.server(server)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	return s.Vector(*group)
+	vector, vcall, err := s.Vector(*group)
+	call.Add(&vcall)
+	return
 }
 
 // Report generates a report for the requested replication group.
-func (c *Client) Report(server string, group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, err error) {
+func (c *Client) Report(server string, group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
+	call.Begin("Client.Report")
+	defer call.Complete(err)
+
 	s, err := c.server(server)
 	if err != nil {
-		return nil, "", err
+		return
 	}
 
-	return s.Report(group, vector, backlog, files)
+	data, report, rcall, err := s.Report(group, vector, backlog, files)
+	call.Add(&rcall)
+	return
 }
 
 func (c *Client) server(fqdn string) (r Reporter, err error) {

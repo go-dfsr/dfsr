@@ -1,9 +1,11 @@
 package monitor
 
 import (
+	"log"
 	"sync"
 	"time"
 
+	"gopkg.in/dfsr.v0/callstat"
 	"gopkg.in/dfsr.v0/core"
 	"gopkg.in/dfsr.v0/helper"
 	"gopkg.in/dfsr.v0/valuesink"
@@ -34,6 +36,8 @@ func (w *worker) Poll() {
 		return
 	}
 
+	start := time.Now()
+
 	var wg sync.WaitGroup
 	wg.Add(len(conns))
 
@@ -42,12 +46,16 @@ func (w *worker) Poll() {
 	}
 
 	wg.Wait()
+
+	duration := time.Now().Sub(start)
+
+	log.Printf("Polling completed in %v.", duration)
 }
 
 func (w *worker) compute(backlog *core.Backlog, wg *sync.WaitGroup) {
-	backlog.Timestamp = time.Now()
-	backlog.Backlog, backlog.Err = w.client.Backlog(backlog.From, backlog.To, *backlog.Group.ID)
-	backlog.Duration = time.Now().Sub(backlog.Timestamp)
+	var call callstat.Call
+	backlog.Backlog, call, backlog.Err = w.client.Backlog(backlog.From, backlog.To, *backlog.Group.ID)
+	backlog.Duration = call.Duration()
 	//w.sink.Update(backlog, timestamp, err) // TODO: Figure out a representation for value sink
 	w.bc.Broadcast(backlog)
 	wg.Done()

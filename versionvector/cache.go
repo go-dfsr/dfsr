@@ -4,16 +4,27 @@ import (
 	"time"
 
 	"gopkg.in/dfsr.v0/cache"
+	"gopkg.in/dfsr.v0/callstat"
 
 	"github.com/go-ole/go-ole"
 )
 
 // Lookup defines a version vector lookup function.
-type Lookup func(guid ole.GUID) (vector *Vector, err error)
+type Lookup func(guid ole.GUID) (vector *Vector, call callstat.Call, err error)
+
+type entry struct {
+	vector *Vector
+	call   callstat.Call
+}
 
 func castLookup(lookup Lookup) cache.Lookup {
 	return func(key cache.Key) (value cache.Value, err error) {
-		return lookup(key.(ole.GUID))
+		vector, call, err := lookup(key.(ole.GUID))
+		value = entry{
+			vector: vector,
+			call:   call,
+		}
+		return
 	}
 }
 
@@ -49,8 +60,11 @@ func (cache *Cache) Evict() {
 // exists in the cache for that GUID, the existing value is replaced.
 //
 // If the cache has been closed then Set will do nothing.
-func (cache *Cache) Set(guid ole.GUID, vector *Vector) {
-	cache.c.Set(guid, vector)
+func (cache *Cache) Set(guid ole.GUID, vector *Vector, call callstat.Call) {
+	cache.c.Set(guid, entry{
+		vector: vector,
+		call:   call,
+	})
 }
 
 // Value returns the cached vector for the given GUID if it exists in the cache
@@ -58,10 +72,17 @@ func (cache *Cache) Set(guid ole.GUID, vector *Vector) {
 // false.
 //
 // If the cache has been closed then ok will be false.
-func (cache *Cache) Value(guid ole.GUID) (vector *Vector, ok bool) {
+func (cache *Cache) Value(guid ole.GUID) (vector *Vector, call callstat.Call, ok bool) {
 	v, ok := cache.c.Value(guid)
 	if ok {
-		vector, _ = v.(*Vector).Duplicate()
+		e := v.(entry)
+		var err error
+		vector, err = e.vector.Duplicate()
+		if err != nil {
+			ok = false
+			return
+		}
+		call = e.call
 	}
 	return
 }
@@ -73,13 +94,25 @@ func (cache *Cache) Value(guid ole.GUID) (vector *Vector, ok bool) {
 // If the cache has been closed then ErrClosed will be returned.
 //
 // TODO: Add context after Go 1.7 is released?
-func (cache *Cache) Lookup(guid ole.GUID) (vector *Vector, err error) {
+func (cache *Cache) Lookup(guid ole.GUID) (vector *Vector, call callstat.Call, err error) {
+	call.Begin("Cache.Lookup")
+	defer call.Complete(err)
+
 	v, err := cache.c.Lookup(guid)
 	if err != nil {
 		// Values aren't cached when an error comes back, so it's safe to return
 		// the unduplicated value here. In all likelihood v should be nil here
 		// anwyay.
-		return v.(*Vector), err
+		if v == nil {
+			return
+		}
+		e := v.(entry)
+		call.Add(&e.call)
+		vector = e.vector
+		return
 	}
-	return v.(*Vector).Duplicate()
+	e := v.(entry)
+	call.Add(&e.call)
+	vector, err = e.vector.Duplicate()
+	return
 }
