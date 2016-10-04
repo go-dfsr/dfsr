@@ -22,6 +22,7 @@ var delaySecondsFlag uint
 var cacheSecondsFlag uint
 var skipFlag regexSlice
 var minFlag uint
+var verboseFlag bool
 
 const defaultLoopValue = 1
 
@@ -36,6 +37,7 @@ func init() {
 	flag.UintVar(&cacheSecondsFlag, "cache", 5, "number of seconds to cache vectors")
 	flag.Var(&skipFlag, "skip", "regex of hostname to skip")
 	flag.UintVar(&minFlag, "min", 0, "minimum backlog to display")
+	flag.BoolVar(&verboseFlag, "v", false, "verbose")
 }
 
 func main() {
@@ -107,14 +109,17 @@ func run(domain string, iteration uint, min uint, client *helper.Client, connect
 		fmt.Printf("%-50s %-50s %-50s ", c.Group.Name, c.From, c.To)
 		if c.Err != nil {
 			fmt.Printf("%-15v ", c.Err)
+			//fmt.Printf("%-15v ", c.Call)
 		} else {
 			fmt.Printf("%-15s ", fmt.Sprint(c.Backlog))
 		}
-		fmt.Printf("%v\n", c.BacklogDuration)
+		fmt.Printf("%v\n", c.Call.Duration())
+		if verboseFlag {
+			fmt.Printf("Call: %v\n", c.Call)
+		}
 	}
 
 	fmt.Printf("Total Time: %v\n", finish.Sub(start))
-
 }
 
 func setup(domain string, groupRegex, fromRegex, toRegex, memberRegex, skipRegex regexSlice) (dom string, connections []connection, err error) {

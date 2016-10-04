@@ -2,7 +2,6 @@ package main
 
 import (
 	"sync"
-	"time"
 
 	"gopkg.in/dfsr.v0/callstat"
 	"gopkg.in/dfsr.v0/core"
@@ -10,18 +9,16 @@ import (
 )
 
 type connection struct {
-	From            string
-	To              string
-	Group           *core.Group
-	Backlog         []int
-	Err             error
-	BacklogDuration time.Duration
+	From    string
+	To      string
+	Group   *core.Group
+	Backlog []int
+	Call    callstat.Call
+	Err     error
 }
 
 func (c *connection) ComputeBacklog(client *helper.Client, wg *sync.WaitGroup) {
-	var call callstat.Call
-	c.Backlog, call, c.Err = client.Backlog(c.From, c.To, *c.Group.ID)
-	c.BacklogDuration = call.Duration()
+	c.Backlog, c.Call, c.Err = client.Backlog(c.From, c.To, *c.Group.ID)
 	wg.Done()
 }
 
