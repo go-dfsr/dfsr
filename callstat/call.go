@@ -55,9 +55,20 @@ func (c Call) String() string {
 	if desc == "" {
 		desc = "Call"
 	}
+
 	seconds := fmt.Sprintf("%.4fs", c.Duration().Seconds())
-	if len(c.Inner) > 0 {
-		return fmt.Sprintf("(%s %s %v)", desc, seconds, c.Inner)
+
+	if len(c.Inner) == 0 {
+		return fmt.Sprintf("%s %s", desc, seconds)
 	}
-	return fmt.Sprintf("(%s %s)", desc, seconds)
+
+	var inner []byte
+	for i := 0; i < len(c.Inner); i++ {
+		if i > 0 {
+			inner = append(inner, ", "...)
+		}
+		inner = append(inner, c.Inner[i].String()...)
+	}
+
+	return fmt.Sprintf("%s %s (%s)", desc, seconds, inner)
 }
