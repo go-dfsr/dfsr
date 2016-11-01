@@ -7,12 +7,13 @@ import (
 	"github.com/stathat/go"
 
 	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/monitor"
 )
 
 // Consumer represents a StatHat consumer of DFSR monitor backlog updates.
 type Consumer struct {
 	ezkey  string
-	c      <-chan *core.Backlog
+	ch     <-chan *monitor.Update
 	format string
 }
 
@@ -22,12 +23,12 @@ type Consumer struct {
 // If the provided ezkey is empty New will panic.
 //
 // If the provided format is empty New will return a consumer that does nothing.
-func New(ezkey string, format string, backlog <-chan *core.Backlog) *Consumer {
+func New(ezkey string, format string, updates <-chan *monitor.Update) *Consumer {
 	if ezkey == "" {
 		panic("ezkey not provided to StatHat consumer")
 	}
 	c := &Consumer{
-		c:      backlog,
+		ch:     updates,
 		ezkey:  ezkey,
 		format: format,
 	}
@@ -37,31 +38,25 @@ func New(ezkey string, format string, backlog <-chan *core.Backlog) *Consumer {
 
 func (c *Consumer) run() {
 	for {
-		backlog, ok := <-c.c
+		update, ok := <-c.ch
 		if !ok {
 			return
 		}
-		if !reportable(backlog) {
-			continue
+		for backlog := range update.Listen() {
+			if !reportable(backlog) {
+				continue
+			}
+			c.send(backlog)
 		}
-		c.send(backlog)
 	}
 }
 
 func (c *Consumer) send(backlog *core.Backlog) {
-	var total int
-	for _, value := range backlog.Backlog {
-		if value < 0 {
-			// Indicates per-folder error, skip when tallying
-			continue
-		}
-		total += value
-	}
 	name := c.statName(backlog)
 	if name == "" {
 		return
 	}
-	stathat.PostEZValueTime(name, c.ezkey, float64(total), backlog.Timestamp.Unix())
+	stathat.PostEZValueTime(name, c.ezkey, float64(backlog.Sum()), backlog.Call.Start.Unix())
 }
 
 func (c *Consumer) statName(backlog *core.Backlog) string {
@@ -81,13 +76,13 @@ func reportable(backlog *core.Backlog) bool {
 		return false
 	}
 
-	if len(backlog.Backlog) == 0 {
+	if len(backlog.Folders) == 0 {
 		// Indicates replication group query error
 		return false
 	}
 
-	for _, value := range backlog.Backlog {
-		if value < 0 {
+	for f := range backlog.Folders {
+		if backlog.Folders[f].Backlog < 0 {
 			// Indicates per-folder query error
 			return false
 		}

@@ -53,11 +53,11 @@ func (m *dfsrmonitor) Execute(args []string, r <-chan svc.ChangeRequest, changes
 	// Step 3: Create backlog monitor
 	elog.Info(EventInitProgress, "Creating backlog monitor.")
 	mon := monitor.New(cfg, settings.BacklogPollingInterval, settings.VectorCacheDuration, settings.Limit)
-	monChan := mon.Listen(16, time.Second*5)
+	monChan := mon.Listen(16)
 
 	// Step 4: Create backlog consumers
 	if settings.StatHatKey != "" {
-		stathatconsumer.New(settings.StatHatKey, settings.StatHatFormat, mon.Listen(16, time.Second*30))
+		stathatconsumer.New(settings.StatHatKey, settings.StatHatFormat, mon.Listen(16))
 	}
 
 	// Step 5: Start backlog monitor
@@ -75,15 +75,11 @@ func (m *dfsrmonitor) Execute(args []string, r <-chan svc.ChangeRequest, changes
 
 	for {
 		select {
-		case backlog, running := <-monChan:
+		case update, running := <-monChan:
 			if !running {
 				return
 			}
-			if backlog.Err == nil {
-				//elog.Info(1, fmt.Sprintf("[%s]Backlog from %s to %s: %v", backlog.Group.Name, backlog.From, backlog.To, backlog.Backlog))
-			} else {
-				//elog.Info(1, fmt.Sprintf("[%s]Backlog from %s to %s: %v", backlog.Group.Name, backlog.From, backlog.To, backlog.Err))
-			}
+			go watchUpdate(update)
 		case c := <-r:
 			switch c.Cmd {
 			case svc.Interrogate:
@@ -133,4 +129,18 @@ func runService(name string, isDebug bool) {
 		return
 	}
 	elog.Info(1, fmt.Sprintf("Stopped %s service.", name))
+}
+
+func watchUpdate(update *monitor.Update) {
+	elog.Info(1, fmt.Sprintf("Polling started at %v", update.Start()))
+	for backlog := range update.Listen() {
+		if backlog.Err != nil {
+			elog.Info(1, fmt.Sprintf("[%s] Backlog from %s to %s: %v", backlog.Group.Name, backlog.From, backlog.To, backlog.Err))
+			continue
+		}
+		if !backlog.IsZero() {
+			elog.Info(1, fmt.Sprintf("[%s] Backlog from %s to %s: %v", backlog.Group.Name, backlog.From, backlog.To, backlog.Sum()))
+		}
+	}
+	elog.Info(1, fmt.Sprintf("Polling finished at %v. Total wall time: %v", update.End(), update.Duration()))
 }

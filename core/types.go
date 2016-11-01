@@ -3,6 +3,8 @@ package core
 import (
 	"time"
 
+	"gopkg.in/dfsr.v0/callstat"
+
 	"github.com/go-ole/go-ole"
 )
 
@@ -76,13 +78,49 @@ type Connection struct {
 	Computer Computer // Distinguished name of source member in topology, matches DN field of that Member
 }
 
+// FolderBacklog represents the backlog for an individual folder.
+type FolderBacklog struct {
+	Folder  *Folder
+	Backlog int
+}
+
 // Backlog represents the backlog from one DFSR member to another.
 type Backlog struct {
-	Group     *Group
-	From      string
-	To        string
-	Backlog   []int
-	Timestamp time.Time
-	Duration  time.Duration // Wall time for backlog calculation
-	Err       error
+	Group   *Group
+	From    string
+	To      string
+	Folders []FolderBacklog
+	Call    callstat.Call
+	Err     error
+}
+
+// Sum returns the total backlog of all replicated folders. Negatives values,
+// which incidate errors, are not included in the summation.
+func (b *Backlog) Sum() (backlog uint) {
+	for f := range b.Folders {
+		if value := b.Folders[f].Backlog; value > 0 {
+			backlog += uint(value)
+		}
+	}
+	return
+}
+
+// IsZero reports whether b represents a successful backlog query that returned
+// a count of zero for all replication folders in the replication group.
+func (b *Backlog) IsZero() bool {
+	if b.Err != nil {
+		return false
+	}
+
+	if len(b.Folders) == 0 {
+		return false
+	}
+
+	for f := range b.Folders {
+		if b.Folders[f].Backlog != 0 {
+			return false
+		}
+	}
+
+	return true
 }

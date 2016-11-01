@@ -1,11 +1,9 @@
 package monitor
 
 import (
-	"log"
 	"sync"
 	"time"
 
-	"gopkg.in/dfsr.v0/callstat"
 	"gopkg.in/dfsr.v0/core"
 	"gopkg.in/dfsr.v0/helper"
 	"gopkg.in/dfsr.v0/valuesink"
@@ -18,7 +16,7 @@ type worker struct {
 	source Source
 	client *helper.Client
 	sink   *valuesink.Sink
-	bc     *backlogBroadcaster
+	bc     *broadcaster
 }
 
 func (w *worker) Close() {
@@ -35,28 +33,51 @@ func (w *worker) Poll() {
 	if len(conns) == 0 {
 		return
 	}
+	size := len(conns)
+
+	updates := w.bc.Broadcast(domain, size)
+
+	var computed, sent sync.WaitGroup
+	computed.Add(size)
+	sent.Add(size)
 
 	start := time.Now()
 
-	var wg sync.WaitGroup
-	wg.Add(len(conns))
-
 	for _, conn := range conns {
-		go w.compute(conn, &wg)
+		go w.compute(conn, updates, &computed, &sent)
 	}
 
-	wg.Wait()
+	for _, update := range updates {
+		update.setStart(start)
+	}
 
-	duration := time.Now().Sub(start)
+	computed.Wait()
+	end := time.Now()
 
-	log.Printf("Polling completed in %v.", duration)
+	sent.Wait()
+
+	for _, update := range updates {
+		update.setEnd(end)
+	}
 }
 
-func (w *worker) compute(backlog *core.Backlog, wg *sync.WaitGroup) {
-	var call callstat.Call
-	backlog.Backlog, call, backlog.Err = w.client.Backlog(backlog.From, backlog.To, *backlog.Group.ID)
-	backlog.Duration = call.Duration()
+func (w *worker) compute(backlog *core.Backlog, updates []*Update, computed, sent *sync.WaitGroup) {
+	var values []int
+
+	values, backlog.Call, backlog.Err = w.client.Backlog(backlog.From, backlog.To, *backlog.Group.ID)
+	computed.Done()
+
+	if n := len(values); n == len(backlog.Group.Folders) {
+		backlog.Folders = make([]core.FolderBacklog, n)
+		for v := 0; v < n; v++ {
+			backlog.Folders[v].Folder = &backlog.Group.Folders[v]
+			backlog.Folders[v].Backlog = values[v]
+		}
+	}
+
 	//w.sink.Update(backlog, timestamp, err) // TODO: Figure out a representation for value sink
-	w.bc.Broadcast(backlog)
-	wg.Done()
+	for _, update := range updates {
+		update.send(backlog)
+	}
+	sent.Done()
 }

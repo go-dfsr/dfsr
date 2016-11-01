@@ -2,24 +2,18 @@ package monitor
 
 import (
 	"sync"
-	"time"
 
 	"gopkg.in/dfsr.v0/core"
 )
 
-// backlogBroadcaster broadcasts backlog data to a set of listeners.
-type backlogBroadcaster struct {
+// broadcaster broadcasts backlog updates to a set of listeners.
+type broadcaster struct {
 	mutex     sync.RWMutex
-	listeners []backlogListener
+	listeners []chan *Update
 	closed    bool
 }
 
-type backlogListener struct {
-	c       chan *core.Backlog
-	timeout time.Duration
-}
-
-func (bc *backlogBroadcaster) Close() {
+func (bc *broadcaster) Close() {
 	bc.mutex.Lock()
 	defer bc.mutex.Unlock()
 
@@ -29,19 +23,16 @@ func (bc *backlogBroadcaster) Close() {
 	bc.closed = true
 
 	for _, listener := range bc.listeners {
-		close(listener.c)
+		close(listener)
 	}
 	bc.listeners = nil
 }
 
-func (bc *backlogBroadcaster) Listen(chanSize int, timeout time.Duration) <-chan *core.Backlog {
-	ch := make(chan *core.Backlog, chanSize)
+func (bc *broadcaster) Listen(chanSize int) <-chan *Update {
+	ch := make(chan *Update, chanSize)
 	bc.mutex.Lock()
 	if !bc.closed {
-		bc.listeners = append(bc.listeners, backlogListener{
-			c:       ch,
-			timeout: timeout,
-		})
+		bc.listeners = append(bc.listeners, ch)
 	} else {
 		close(ch)
 	}
@@ -49,12 +40,12 @@ func (bc *backlogBroadcaster) Listen(chanSize int, timeout time.Duration) <-chan
 	return ch
 }
 
-func (bc *backlogBroadcaster) Unlisten(c <-chan *core.Backlog) (found bool) {
+func (bc *broadcaster) Unlisten(ch <-chan *Update) (found bool) {
 	bc.mutex.Lock()
 	defer bc.mutex.Unlock()
 	for i := 0; i < len(bc.listeners); i++ {
-		entry := bc.listeners[i].c
-		if entry != c {
+		entry := bc.listeners[i]
+		if entry != ch {
 			continue
 		}
 
@@ -70,7 +61,7 @@ func (bc *backlogBroadcaster) Unlisten(c <-chan *core.Backlog) (found bool) {
 	return
 }
 
-func (bc *backlogBroadcaster) Broadcast(backlog *core.Backlog) {
+func (bc *broadcaster) Broadcast(domain *core.Domain, size int) (updates []*Update) {
 	bc.mutex.Lock()
 	defer bc.mutex.Unlock()
 
@@ -78,22 +69,12 @@ func (bc *backlogBroadcaster) Broadcast(backlog *core.Backlog) {
 		return
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(len(bc.listeners))
-	for _, listener := range bc.listeners {
-		go sendBacklog(backlog, listener.c, listener.timeout, &wg)
-	}
-	wg.Wait()
-}
+	updates = make([]*Update, len(bc.listeners))
 
-func sendBacklog(backlog *core.Backlog, c chan<- *core.Backlog, timeout time.Duration, wg *sync.WaitGroup) {
-	if timeout == 0 {
-		c <- backlog
-	} else {
-		select {
-		case c <- backlog:
-		case <-time.After(timeout):
-		}
+	for i, listener := range bc.listeners {
+		update := newUpdate(domain, size)
+		updates[i] = update
+		listener <- update
 	}
-	wg.Done()
+	return
 }

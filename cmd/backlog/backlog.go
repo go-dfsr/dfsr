@@ -9,6 +9,7 @@ import (
 
 	"gopkg.in/adsi.v0"
 	"gopkg.in/dfsr.v0/config"
+	"gopkg.in/dfsr.v0/core"
 	"gopkg.in/dfsr.v0/helper"
 )
 
@@ -81,7 +82,7 @@ func main() {
 	}
 }
 
-func run(domain string, iteration uint, min uint, client *helper.Client, connections []connection) {
+func run(domain string, iteration uint, min uint, client *helper.Client, connections []core.Backlog) {
 	var wg sync.WaitGroup
 	wg.Add(len(connections))
 
@@ -92,7 +93,7 @@ func run(domain string, iteration uint, min uint, client *helper.Client, connect
 	start := time.Now()
 
 	for i := 0; i < len(connections); i++ {
-		go connections[i].ComputeBacklog(client, &wg)
+		go computeBacklog(client, &connections[i], &wg)
 	}
 
 	wg.Wait()
@@ -102,7 +103,7 @@ func run(domain string, iteration uint, min uint, client *helper.Client, connect
 	for i := 0; i < len(connections); i++ {
 		c := &connections[i]
 
-		if c.TotalBacklog() < min {
+		if c.Sum() < min {
 			continue
 		}
 
@@ -111,7 +112,7 @@ func run(domain string, iteration uint, min uint, client *helper.Client, connect
 			fmt.Printf("%-15v ", c.Err)
 			//fmt.Printf("%-15v ", c.Call)
 		} else {
-			fmt.Printf("%-15s ", fmt.Sprint(c.Backlog))
+			fmt.Printf("%-15s ", fmt.Sprint(c.Sum()))
 		}
 		fmt.Printf("%v\n", c.Call.Duration())
 		if verboseFlag {
@@ -122,7 +123,7 @@ func run(domain string, iteration uint, min uint, client *helper.Client, connect
 	fmt.Printf("Total Time: %v\n", finish.Sub(start))
 }
 
-func setup(domain string, groupRegex, fromRegex, toRegex, memberRegex, skipRegex regexSlice) (dom string, connections []connection, err error) {
+func setup(domain string, groupRegex, fromRegex, toRegex, memberRegex, skipRegex regexSlice) (dom string, connections []core.Backlog, err error) {
 	client, err := adsi.NewClient()
 	if err != nil {
 		return "", nil, err
@@ -180,13 +181,26 @@ func setup(domain string, groupRegex, fromRegex, toRegex, memberRegex, skipRegex
 					continue
 				}
 
-				connections = append(connections, connection{
+				connections = append(connections, core.Backlog{
+					Group: group,
 					From:  from,
 					To:    to,
-					Group: group,
 				})
 			}
 		}
 	}
 	return
+}
+
+func computeBacklog(client *helper.Client, backlog *core.Backlog, wg *sync.WaitGroup) {
+	var values []int
+	values, backlog.Call, backlog.Err = client.Backlog(backlog.From, backlog.To, *backlog.Group.ID)
+	if n := len(values); n == len(backlog.Group.Folders) {
+		backlog.Folders = make([]core.FolderBacklog, n)
+		for v := 0; v < n; v++ {
+			backlog.Folders[v].Folder = &backlog.Group.Folders[v]
+			backlog.Folders[v].Backlog = values[v]
+		}
+	}
+	wg.Done()
 }
