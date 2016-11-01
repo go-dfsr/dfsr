@@ -19,7 +19,7 @@ type Call struct {
 	Inner []Call
 }
 
-// Duration is the total time it took to make the call.
+// Duration is the total wall time it took to make the call.
 func (c *Call) Duration() time.Duration {
 	return c.End.Sub(c.Start)
 }
