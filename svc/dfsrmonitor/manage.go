@@ -10,13 +10,13 @@ import (
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
-func startService(name string) error {
+func startService(env *Environment) error {
 	m, err := mgr.Connect()
 	if err != nil {
 		return err
 	}
 	defer m.Disconnect()
-	s, err := m.OpenService(name)
+	s, err := m.OpenService(env.ServiceName)
 	if err != nil {
 		return fmt.Errorf("Could not access service: %v", err)
 	}
@@ -28,13 +28,13 @@ func startService(name string) error {
 	return nil
 }
 
-func controlService(name string, c svc.Cmd, to svc.State) error {
+func controlService(env *Environment, c svc.Cmd, to svc.State) error {
 	m, err := mgr.Connect()
 	if err != nil {
 		return err
 	}
 	defer m.Disconnect()
-	s, err := m.OpenService(name)
+	s, err := m.OpenService(env.ServiceName)
 	if err != nil {
 		return fmt.Errorf("Could not access service: %v", err)
 	}

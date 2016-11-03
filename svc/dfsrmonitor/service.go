@@ -3,8 +3,8 @@
 package main
 
 import (
+	"flag"
 	"fmt"
-	"os"
 	"time"
 
 	"gopkg.in/dfsr.v0/config"
@@ -28,11 +28,11 @@ func (m *dfsrmonitor) Execute(args []string, r <-chan svc.ChangeRequest, changes
 	// TODO: Move all of this initialization code into its own goroutine with a context for cancellation
 
 	// Step 1: Parse settings
-	settings := DefaultSettings
-	if isIntSess {
-		settings.Parse(os.Args[2:])
-	} else {
-		settings.Parse(args)
+	settings := environment.Settings
+	if !environment.IsInteractive {
+		elog.Info(1, fmt.Sprintf("Service Args: %v", args))
+		settings.Parse(args[1:], flag.ExitOnError)
+		elog.Info(1, fmt.Sprintf("Service Settings: %+v", settings))
 	}
 
 	// Step 2: Create and start configuration monitor
@@ -106,36 +106,36 @@ func (m *dfsrmonitor) Execute(args []string, r <-chan svc.ChangeRequest, changes
 	}
 }
 
-func runService(name string, isDebug bool) {
+func runService(env *Environment) {
 	var err error
-	if isDebug {
-		elog = debug.New(name)
+	if env.IsDebug {
+		elog = debug.New(env.ServiceName)
 	} else {
-		elog, err = eventlog.Open(name)
+		elog, err = eventlog.Open(env.ServiceName)
 		if err != nil {
 			return
 		}
 	}
 	defer elog.Close()
 
-	elog.Info(1, fmt.Sprintf("Starting %s service.", name))
+	elog.Info(1, fmt.Sprintf("Starting %s service.", env.ServiceName))
 	run := svc.Run
-	if isDebug {
+	if env.IsDebug {
 		run = debug.Run
 	}
-	err = run(name, &dfsrmonitor{})
+	err = run(env.ServiceName, &dfsrmonitor{})
 	if err != nil {
-		elog.Error(1, fmt.Sprintf("Failed to start %s service: %v", name, err))
+		elog.Error(1, fmt.Sprintf("Failed to start %s service: %v", env.ServiceName, err))
 		return
 	}
-	elog.Info(1, fmt.Sprintf("Stopped %s service.", name))
+	elog.Info(1, fmt.Sprintf("Stopped %s service.", env.ServiceName))
 }
 
 func watchUpdate(update *monitor.Update) {
 	elog.Info(1, fmt.Sprintf("Polling started at %v", update.Start()))
 	for backlog := range update.Listen() {
 		if backlog.Err != nil {
-			elog.Info(1, fmt.Sprintf("[%s] Backlog from %s to %s: %v", backlog.Group.Name, backlog.From, backlog.To, backlog.Err))
+			elog.Warning(1, fmt.Sprintf("[%s] Backlog from %s to %s: %v", backlog.Group.Name, backlog.From, backlog.To, backlog.Err))
 			continue
 		}
 		if !backlog.IsZero() {

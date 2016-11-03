@@ -2,6 +2,13 @@
 
 package main
 
+// Windows Service Properties
+const (
+	DefaultServiceName = "dfsrmonitor"
+	DefaultDisplayName = "DFSR Monitor"
+	DefaultDescription = "Monitors DFSR backlog counts"
+)
+
 // Error constants
 const (
 	_ = iota // 0 == success
@@ -12,7 +19,7 @@ const (
 
 // Event constants
 const (
-	EventInitProgress = iota
+	EventInitProgress = iota + 1
 	EventInitComplete
 	EventInitFailure
 )

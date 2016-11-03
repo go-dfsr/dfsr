@@ -3,6 +3,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -10,11 +11,6 @@ import (
 
 	"golang.org/x/sys/windows/svc"
 )
-
-const svcName = "dfsrmonitor"
-const svcDesc = "DFSR Monitor"
-
-var isIntSess bool
 
 func usage(errmsg string) {
 	fmt.Fprintf(os.Stderr,
@@ -27,14 +23,16 @@ func usage(errmsg string) {
 }
 
 func main() {
-	var err error
-	isIntSess, err = svc.IsAnInteractiveSession()
+	env, err := &environment, error(nil)
+
+	env.IsInteractive, err = svc.IsAnInteractiveSession()
 	if err != nil {
-		log.Fatalf("Failed to determine interactive session status: %v", err)
+		fmt.Fprintf(os.Stderr, "Failed to determine interactive session status: %v\n", err)
+		os.Exit(2)
 	}
 
-	if !isIntSess {
-		runService(svcName, false)
+	if !env.IsInteractive {
+		runService(env)
 		return
 	}
 
@@ -42,28 +40,37 @@ func main() {
 		usage("No command specified.")
 	}
 
+	env.Parse(os.Args[2:], flag.ExitOnError)
+	err = env.Detect()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to detect environment: %v\n", err)
+		os.Exit(2)
+	}
+	env.Analyze()
+
 	cmd := strings.ToLower(os.Args[1])
 	switch cmd {
 	case "debug":
-		runService(svcName, true)
+		env.IsDebug = true
+		runService(env)
 		return
 	case "install":
-		err = installService(svcName, svcDesc)
+		err = installService(env)
 	case "remove":
-		err = removeService(svcName)
+		err = removeService(env)
 	case "start":
-		err = startService(svcName)
+		err = startService(env)
 	case "stop":
-		err = controlService(svcName, svc.Stop, svc.Stopped)
+		err = controlService(env, svc.Stop, svc.Stopped)
 	case "pause":
-		err = controlService(svcName, svc.Pause, svc.Paused)
+		err = controlService(env, svc.Pause, svc.Paused)
 	case "continue":
-		err = controlService(svcName, svc.Continue, svc.Running)
+		err = controlService(env, svc.Continue, svc.Running)
 	default:
 		usage(fmt.Sprintf("Invalid command %s", cmd))
 	}
 	if err != nil {
-		log.Fatalf("Failed to %s %s: %v", cmd, svcName, err)
+		log.Fatalf("Failed to %s %s: %v", cmd, env.ServiceName, err)
 	}
 	return
 }
