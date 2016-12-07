@@ -2,6 +2,8 @@
 Windows Distributed File System Replication monitoring for the Go programming
 language
 
+[![GoDoc](https://godoc.org/gopkg.in/dfsr.v0?status.svg)](https://godoc.org/gopkg.in/dfsr.v0)
+
 This is a repository of Go packages, command line tools and services that allow
 for manual and automated monitoring of DFSR configuration and backlog counts.
 
