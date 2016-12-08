@@ -108,6 +108,7 @@ func (r *reporter) Backlog(vector *versionvector.Vector) (backlog []int, call ca
 	if err != nil {
 		return
 	}
+	defer sa.Release()
 
 	backlog = makeBacklog(sa)
 	return
