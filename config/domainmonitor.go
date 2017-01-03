@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -71,7 +72,8 @@ type domainSource struct {
 	bc     *domainBroadcaster
 }
 
-func (ds *domainSource) Poll() {
+func (ds *domainSource) Poll(ctx context.Context) {
+	// FIXME: Propagate the context
 	timestamp := time.Now()
 	cfg, err := Domain(ds.client, ds.domain)
 	ds.sink.Update(&cfg, timestamp, err)

@@ -3,6 +3,7 @@
 package cache
 
 import (
+	"context"
 	"errors"
 	"io"
 	"sync"
@@ -30,7 +31,7 @@ type Closer interface {
 }
 
 // Lookup defines a lookup function for retrieving new cache values.
-type Lookup func(key Key) (value Value, err error)
+type Lookup func(ctx context.Context, key Key) (value Value, err error)
 
 var (
 	// ErrClosed is returned from calls to the cache or in the event that the
@@ -173,9 +174,7 @@ func (cache *Cache) value(k Key) (value Value, ok bool) {
 // performed.
 //
 // If the cache has been closed then ErrClosed will be returned.
-//
-// TODO: Add context after Go 1.7 is released?
-func (cache *Cache) Lookup(key Key) (value Value, err error) {
+func (cache *Cache) Lookup(ctx context.Context, key Key) (value Value, err error) {
 	// First attempt with read lock
 	cache.m.RLock()
 	if cache.closed() {
@@ -199,7 +198,7 @@ func (cache *Cache) Lookup(key Key) (value Value, err error) {
 	}
 
 	// Wait for a response
-	p := cache.pend(key)
+	p := cache.pend(ctx, key)
 	cache.m.Unlock()
 	p.WG.Wait()
 
@@ -208,19 +207,21 @@ func (cache *Cache) Lookup(key Key) (value Value, err error) {
 
 // pend does not acquire a lock. It is the caller's responsibility to maintain
 // a read/write lock on the cache during the call.
-func (cache *Cache) pend(k Key) (p *pendingEntry) {
+//
+// FIXME: Correctly handle contexts when there are multiple pending callers.
+func (cache *Cache) pend(ctx context.Context, k Key) (p *pendingEntry) {
 	p, found := cache.pending[k]
 	if !found {
 		p = &pendingEntry{}
 		cache.pending[k] = p
 		p.WG.Add(1)
-		go cache.retrieve(k, p)
+		go cache.retrieve(ctx, k, p) // FIXME: Create a composite context that only cancels if all of its members also cancel?
 	}
 	return
 }
 
-func (cache *Cache) retrieve(k Key, p *pendingEntry) {
-	p.Value, p.Err = cache.lookup(k) // This may block for some time
+func (cache *Cache) retrieve(ctx context.Context, k Key, p *pendingEntry) {
+	p.Value, p.Err = cache.lookup(ctx, k) // This may block for some time
 	now := time.Now()
 	cache.m.Lock()
 	if cache.closed() {

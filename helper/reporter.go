@@ -1,6 +1,7 @@
 package helper
 
 import (
+	"context"
 	"errors"
 	"sync"
 
@@ -17,9 +18,9 @@ import (
 // All implementations of the Reporter interface must be threadsafe.
 type Reporter interface {
 	Close()
-	Vector(group ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error)
-	Backlog(vector *versionvector.Vector) (backlog []int, call callstat.Call, err error)
-	Report(group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error)
+	Vector(ctx context.Context, group ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error)
+	Backlog(ctx context.Context, vector *versionvector.Vector) (backlog []int, call callstat.Call, err error)
+	Report(ctx context.Context, group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error)
 }
 
 var _ = (Reporter)((*reporter)(nil)) // Compile-time interface compliance check
@@ -69,7 +70,7 @@ func (r *reporter) Close() {
 
 // Vector returns the reference version vectors for the requested replication
 // group.
-func (r *reporter) Vector(group ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error) {
+func (r *reporter) Vector(ctx context.Context, group ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error) {
 	r.m.Lock()
 	defer r.m.Unlock()
 	call.Begin("Reporter.Vector")
@@ -92,7 +93,7 @@ func (r *reporter) Vector(group ole.GUID) (vector *versionvector.Vector, call ca
 
 // Backlog returns the current backlog when compared against the given
 // reference version vector.
-func (r *reporter) Backlog(vector *versionvector.Vector) (backlog []int, call callstat.Call, err error) {
+func (r *reporter) Backlog(ctx context.Context, vector *versionvector.Vector) (backlog []int, call callstat.Call, err error) {
 	r.m.Lock()
 	defer r.m.Unlock()
 	call.Begin("Reporter.Backlog")
@@ -116,7 +117,7 @@ func (r *reporter) Backlog(vector *versionvector.Vector) (backlog []int, call ca
 
 // Report generates a report when compared against the given
 // reference version vector.
-func (r *reporter) Report(group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
+func (r *reporter) Report(ctx context.Context, group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
 	if backlog && vector == nil {
 		call.Description = "Reporter.Report"
 		err = errors.New("Backlog reports require that a reference member vector is provided.")

@@ -1,6 +1,8 @@
 package helper
 
 import (
+	"context"
+
 	"github.com/go-ole/go-ole"
 	"gopkg.in/dfsr.v0/callstat"
 	"gopkg.in/dfsr.v0/versionvector"
@@ -37,21 +39,21 @@ func NewLimiter(r Reporter, numWorkers uint) (limited Reporter, err error) {
 	}, nil
 }
 
-func (l *limiter) Vector(group ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error) {
+func (l *limiter) Vector(ctx context.Context, group ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error) {
 	call.Begin("Limiter.Vector")
 	defer call.Complete(err)
 	var subcall callstat.Call
-	vector, subcall, err = l.vwp.Vector(group)
+	vector, subcall, err = l.vwp.Vector(ctx, group)
 	call.Add(&subcall)
 	return
 }
 
-func (l *limiter) Backlog(vector *versionvector.Vector) (backlog []int, call callstat.Call, err error) {
-	return l.r.Backlog(vector)
+func (l *limiter) Backlog(ctx context.Context, vector *versionvector.Vector) (backlog []int, call callstat.Call, err error) {
+	return l.r.Backlog(ctx, vector)
 }
 
-func (l *limiter) Report(group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
-	return l.r.Report(group, vector, backlog, files)
+func (l *limiter) Report(ctx context.Context, group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
+	return l.r.Report(ctx, group, vector, backlog, files)
 }
 
 func (l *limiter) Close() {

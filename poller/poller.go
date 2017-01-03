@@ -1,13 +1,14 @@
 package poller
 
 import (
+	"context"
 	"sync"
 	"time"
 )
 
 // Source is a polling source.
 type Source interface {
-	Poll()
+	Poll(ctx context.Context)
 	Close() // TODO: Consider removing this and doing a runtime type check for io.Closer
 }
 
@@ -76,26 +77,35 @@ func (p *Poller) run() {
 	ticker := time.NewTicker(p.interval)
 	defer ticker.Stop()
 
+	var (
+		ctx    context.Context
+		cancel context.CancelFunc
+	)
+
 	for {
+		ctx, cancel = context.WithCancel(context.Background())
 		select {
 		case <-p.stop:
+			cancel()
 			return
 		case <-p.pulse:
 		case <-ticker.C:
 		}
 
-		go p.update()
+		go p.update(ctx, cancel)
 	}
 }
 
-func (p *Poller) update() {
+func (p *Poller) update(ctx context.Context, cancel context.CancelFunc) {
+	defer cancel()
+
 	if !p.startUpdate() {
 		// There is an update goroutine already running, so we're skipping this
 		// tick so that we don't spawn doubles
 		return
 	}
 
-	p.source.Poll()
+	p.source.Poll(ctx)
 
 	p.finishUpdate()
 }

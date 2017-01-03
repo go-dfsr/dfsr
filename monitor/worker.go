@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -23,7 +24,7 @@ func (w *worker) Close() {
 	w.client.Close()
 }
 
-func (w *worker) Poll() {
+func (w *worker) Poll(ctx context.Context) {
 	domain, _, err := w.source.Value()
 	if err != nil {
 		return
@@ -44,7 +45,7 @@ func (w *worker) Poll() {
 	start := time.Now()
 
 	for _, conn := range conns {
-		go w.compute(conn, updates, &computed, &sent)
+		go w.compute(ctx, conn, updates, &computed, &sent)
 	}
 
 	for _, update := range updates {
@@ -61,10 +62,13 @@ func (w *worker) Poll() {
 	}
 }
 
-func (w *worker) compute(backlog *core.Backlog, updates []*Update, computed, sent *sync.WaitGroup) {
+func (w *worker) compute(ctx context.Context, backlog *core.Backlog, updates []*Update, computed, sent *sync.WaitGroup) {
+	if ctx == nil {
+		panic("nil context")
+	}
 	var values []int
 
-	values, backlog.Call, backlog.Err = w.client.Backlog(backlog.From, backlog.To, *backlog.Group.ID)
+	values, backlog.Call, backlog.Err = w.client.Backlog(ctx, backlog.From, backlog.To, *backlog.Group.ID)
 	computed.Done()
 
 	if n := len(values); n == len(backlog.Group.Folders) {

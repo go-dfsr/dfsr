@@ -1,6 +1,7 @@
 package helper
 
 import (
+	"context"
 	"time"
 
 	"github.com/go-ole/go-ole"
@@ -26,16 +27,17 @@ func NewCacher(r Reporter, duration time.Duration) (cached Reporter) {
 	}
 }
 
-func (c *cacher) Vector(group ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error) {
-	return c.vc.Lookup(group)
+// FIXME: Make the underlying vector cache handle contexts from mulitple pending callers.
+func (c *cacher) Vector(ctx context.Context, group ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error) {
+	return c.vc.Lookup(ctx, group)
 }
 
-func (c *cacher) Backlog(vector *versionvector.Vector) (backlog []int, call callstat.Call, err error) {
-	return c.r.Backlog(vector)
+func (c *cacher) Backlog(ctx context.Context, vector *versionvector.Vector) (backlog []int, call callstat.Call, err error) {
+	return c.r.Backlog(ctx, vector)
 }
 
-func (c *cacher) Report(group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
-	return c.r.Report(group, vector, backlog, files)
+func (c *cacher) Report(ctx context.Context, group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
+	return c.r.Report(ctx, group, vector, backlog, files)
 }
 
 func (c *cacher) Close() {

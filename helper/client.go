@@ -1,6 +1,7 @@
 package helper
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"time"
@@ -100,7 +101,7 @@ func (c *Client) Close() {
 // Backlog returns the outgoing backlog from one DSFR member to another. The
 // backlog of each replicated folder within the requested group is returned.
 // The members are identified by their fully qualified domain names.
-func (c *Client) Backlog(from, to string, group ole.GUID) (backlog []int, call callstat.Call, err error) {
+func (c *Client) Backlog(ctx context.Context, from, to string, group ole.GUID) (backlog []int, call callstat.Call, err error) {
 	call.Begin("Client.Backlog")
 	defer call.Complete(err)
 
@@ -114,14 +115,14 @@ func (c *Client) Backlog(from, to string, group ole.GUID) (backlog []int, call c
 		return
 	}
 
-	v, vcall, err := t.Vector(group)
+	v, vcall, err := t.Vector(ctx, group)
 	call.Add(&vcall)
 	if err != nil {
 		return
 	}
 	defer v.Close()
 
-	backlog, bcall, err := f.Backlog(v)
+	backlog, bcall, err := f.Backlog(ctx, v)
 	call.Add(&bcall)
 	return
 }
@@ -129,7 +130,7 @@ func (c *Client) Backlog(from, to string, group ole.GUID) (backlog []int, call c
 // Vector returns the current referece version vector for the specified
 // replication group on requested DFSR member. The member is identified by its
 // fully qualified domain name.
-func (c *Client) Vector(server string, group *ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error) {
+func (c *Client) Vector(ctx context.Context, server string, group *ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error) {
 	call.Begin("Client.Vector")
 	defer call.Complete(err)
 
@@ -138,13 +139,13 @@ func (c *Client) Vector(server string, group *ole.GUID) (vector *versionvector.V
 		return
 	}
 
-	vector, vcall, err := s.Vector(*group)
+	vector, vcall, err := s.Vector(ctx, *group)
 	call.Add(&vcall)
 	return
 }
 
 // Report generates a report for the requested replication group.
-func (c *Client) Report(server string, group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
+func (c *Client) Report(ctx context.Context, server string, group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
 	call.Begin("Client.Report")
 	defer call.Complete(err)
 
@@ -153,7 +154,7 @@ func (c *Client) Report(server string, group *ole.GUID, vector *versionvector.Ve
 		return
 	}
 
-	data, report, rcall, err := s.Report(group, vector, backlog, files)
+	data, report, rcall, err := s.Report(ctx, group, vector, backlog, files)
 	call.Add(&rcall)
 	return
 }

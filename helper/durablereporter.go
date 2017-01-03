@@ -1,6 +1,7 @@
 package helper
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -51,39 +52,39 @@ func NewDurableReporter(server string, interval time.Duration, retries uint) (re
 	}, nil
 }
 
-func (r *durableReporter) Vector(group ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error) {
+func (r *durableReporter) Vector(ctx context.Context, group ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error) {
 	call.Begin("DurableReporter.Vector")
 	defer call.Complete(err)
 
 	err = r.attempt(func(reporter Reporter) error {
 		var subcall callstat.Call
-		vector, subcall, err = reporter.Vector(group)
+		vector, subcall, err = reporter.Vector(ctx, group)
 		call.Add(&subcall)
 		return err
 	})
 	return
 }
 
-func (r *durableReporter) Backlog(vector *versionvector.Vector) (backlog []int, call callstat.Call, err error) {
+func (r *durableReporter) Backlog(ctx context.Context, vector *versionvector.Vector) (backlog []int, call callstat.Call, err error) {
 	call.Begin("DurableReporter.Backlog")
 	defer call.Complete(err)
 
 	err = r.attempt(func(reporter Reporter) error {
 		var subcall callstat.Call
-		backlog, subcall, err = reporter.Backlog(vector)
+		backlog, subcall, err = reporter.Backlog(ctx, vector)
 		call.Add(&subcall)
 		return err
 	})
 	return
 }
 
-func (r *durableReporter) Report(group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
+func (r *durableReporter) Report(ctx context.Context, group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
 	call.Begin("DurableReporter.Report")
 	defer call.Complete(err)
 
 	err = r.attempt(func(reporter Reporter) error {
 		var subcall callstat.Call
-		data, report, subcall, err = reporter.Report(group, vector, backlog, files)
+		data, report, subcall, err = reporter.Report(ctx, group, vector, backlog, files)
 		call.Add(&subcall)
 		return err
 	})

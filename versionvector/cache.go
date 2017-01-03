@@ -1,6 +1,7 @@
 package versionvector
 
 import (
+	"context"
 	"time"
 
 	"gopkg.in/dfsr.v0/cache"
@@ -10,7 +11,7 @@ import (
 )
 
 // Lookup defines a version vector lookup function.
-type Lookup func(guid ole.GUID) (vector *Vector, call callstat.Call, err error)
+type Lookup func(ctx context.Context, guid ole.GUID) (vector *Vector, call callstat.Call, err error)
 
 type entry struct {
 	vector *Vector
@@ -18,8 +19,8 @@ type entry struct {
 }
 
 func castLookup(lookup Lookup) cache.Lookup {
-	return func(key cache.Key) (value cache.Value, err error) {
-		vector, call, err := lookup(key.(ole.GUID))
+	return func(ctx context.Context, key cache.Key) (value cache.Value, err error) {
+		vector, call, err := lookup(ctx, key.(ole.GUID))
 		value = entry{
 			vector: vector,
 			call:   call,
@@ -92,13 +93,11 @@ func (cache *Cache) Value(guid ole.GUID) (vector *Vector, call callstat.Call, ok
 // lookup will be performed.
 //
 // If the cache has been closed then ErrClosed will be returned.
-//
-// TODO: Add context after Go 1.7 is released?
-func (cache *Cache) Lookup(guid ole.GUID) (vector *Vector, call callstat.Call, err error) {
+func (cache *Cache) Lookup(ctx context.Context, guid ole.GUID) (vector *Vector, call callstat.Call, err error) {
 	call.Begin("Cache.Lookup")
 	defer call.Complete(err)
 
-	v, err := cache.c.Lookup(guid)
+	v, err := cache.c.Lookup(ctx, guid)
 	if err != nil {
 		// Values aren't cached when an error comes back, so it's safe to return
 		// the unduplicated value here. In all likelihood v should be nil here
