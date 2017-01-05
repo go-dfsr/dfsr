@@ -89,16 +89,26 @@ func (m *dfsrmonitor) Execute(args []string, r <-chan svc.ChangeRequest, changes
 				changes <- c.CurrentStatus
 			case svc.Stop, svc.Shutdown:
 				changes <- svc.Status{State: svc.StopPending}
-				//elog.Info(1, "Stop or Shutdown")
-				go mon.Close()
+				elog.Info(1, "Received stop command. Stopping service.")
+				go func() {
+					mon.Close()
+					elog.Info(1, "Service stopped.")
+				}()
 			case svc.Pause:
 				changes <- svc.Status{State: svc.Paused, Accepts: acceptedCmds}
-				//elog.Info(1, "Paused")
-				mon.Stop()
+				elog.Info(1, "Received pause command. Pausing service.")
+				go func() {
+					mon.Stop()
+					elog.Info(1, "Service paused.")
+				}()
 			case svc.Continue:
 				changes <- svc.Status{State: svc.Running, Accepts: acceptedCmds}
 				//elog.Info(1, "Continued")
-				mon.Start()
+				elog.Info(1, "Received continue command. Unpausing service.")
+				go func() {
+					mon.Start()
+					elog.Info(1, "Service unpaused.")
+				}()
 			default:
 				elog.Error(1, fmt.Sprintf("Unexpected control request #%d", c))
 			}
