@@ -81,6 +81,14 @@ func (r *reporter) Vector(ctx context.Context, group ole.GUID) (vector *versionv
 		return
 	}
 
+	// Handle cancellation
+	select {
+	case <-ctx.Done():
+		err = ctx.Err()
+		return
+	default:
+	}
+
 	// TODO: Check dimensions of the returned vectors for sanity
 	sa, err := r.iface.GetReferenceVersionVectors(group)
 	if err != nil {
@@ -102,6 +110,14 @@ func (r *reporter) Backlog(ctx context.Context, vector *versionvector.Vector) (b
 	if r.closed() {
 		err = ErrClosed
 		return
+	}
+
+	// Handle cancellation
+	select {
+	case <-ctx.Done():
+		err = ctx.Err()
+		return
+	default:
 	}
 
 	// TODO: Check dimensions of the returned backlog for sanity
@@ -134,7 +150,14 @@ func (r *reporter) Report(ctx context.Context, group *ole.GUID, vector *versionv
 		err = ErrClosed
 		return
 	}
-	// TODO: Check dimensions of the returned backlog for sanity
+
+	// Handle cancellation
+	select {
+	case <-ctx.Done():
+		err = ctx.Err()
+		return
+	default:
+	}
 
 	flags := api.REPORTING_FLAGS_NONE
 	if backlog {
@@ -149,6 +172,7 @@ func (r *reporter) Report(ctx context.Context, group *ole.GUID, vector *versionv
 		vdata = vector.Data()
 	}
 
+	// TODO: Check dimensions of the returned backlog for sanity
 	data, report, err = r.iface.GetReport(*group, "", vdata, int32(flags))
 	return
 }
