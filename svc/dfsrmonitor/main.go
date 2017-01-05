@@ -23,7 +23,10 @@ func usage(errmsg string) {
 }
 
 func main() {
-	env, err := &environment, error(nil)
+	var (
+		env = &environment
+		err error
+	)
 
 	env.IsInteractive, err = svc.IsAnInteractiveSession()
 	if err != nil {
