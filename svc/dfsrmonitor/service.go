@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"time"
@@ -145,7 +146,9 @@ func watchUpdate(update *monitor.Update) {
 	elog.Info(1, fmt.Sprintf("Polling started at %v", update.Start()))
 	for backlog := range update.Listen() {
 		if backlog.Err != nil {
-			elog.Warning(1, fmt.Sprintf("[%s] Backlog from %s to %s: %v", backlog.Group.Name, backlog.From, backlog.To, backlog.Err))
+			if !isCancellationErr(backlog.Err) {
+				elog.Warning(1, fmt.Sprintf("[%s] Backlog from %s to %s: %v", backlog.Group.Name, backlog.From, backlog.To, backlog.Err))
+			}
 			continue
 		}
 		if !backlog.IsZero() {
@@ -153,4 +156,13 @@ func watchUpdate(update *monitor.Update) {
 		}
 	}
 	elog.Info(1, fmt.Sprintf("Polling finished at %v. Total wall time: %v", update.End(), update.Duration()))
+}
+
+func isCancellationErr(err error) bool {
+	switch err {
+	case context.Canceled, context.DeadlineExceeded:
+		return true
+	default:
+		return false
+	}
 }
