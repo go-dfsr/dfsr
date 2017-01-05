@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -13,19 +14,25 @@ import (
 	"gopkg.in/dfsr.v0/helper"
 )
 
-var domainFlag string
-var groupFlag regexSlice
-var fromFlag regexSlice
-var toFlag regexSlice
-var memberFlag regexSlice
-var loopFlag uintOrInf
-var delaySecondsFlag uint
-var cacheSecondsFlag uint
-var skipFlag regexSlice
-var minFlag uint
-var verboseFlag bool
+var (
+	domainFlag         string
+	groupFlag          regexSlice
+	fromFlag           regexSlice
+	toFlag             regexSlice
+	memberFlag         regexSlice
+	loopFlag           uintOrInf
+	timeoutSecondsFlag uintOrInf
+	delaySecondsFlag   uint
+	cacheSecondsFlag   uint
+	skipFlag           regexSlice
+	minFlag            uint
+	verboseFlag        bool
+)
 
-const defaultLoopValue = 1
+const (
+	defaultLoopValue           = 1
+	defaultTimeoutSecondsValue = 30
+)
 
 func init() {
 	flag.StringVar(&domainFlag, "d", "", "domain to query")
@@ -34,7 +41,8 @@ func init() {
 	flag.Var(&toFlag, "t", "regex of dest hostname")
 	flag.Var(&memberFlag, "m", "regex of member hostname (matches either dest or source)")
 	flag.Var(&loopFlag, "loop", "number of iterations or \"infinite\"")
-	flag.UintVar(&delaySecondsFlag, "delay", 5, "number of seconds to deley between loops")
+	flag.Var(&timeoutSecondsFlag, "timeout", "number of seconds before timeout occurs or \"infininte\"")
+	flag.UintVar(&delaySecondsFlag, "delay", 5, "number of seconds to delay between loops")
 	flag.UintVar(&cacheSecondsFlag, "cache", 5, "number of seconds to cache vectors")
 	flag.Var(&skipFlag, "skip", "regex of hostname to skip")
 	flag.UintVar(&minFlag, "min", 0, "minimum backlog to display")
@@ -52,6 +60,10 @@ func main() {
 		return
 	}
 
+	if !timeoutSecondsFlag.Present {
+		timeoutSecondsFlag.Value = defaultTimeoutSecondsValue
+	}
+
 	domain, connections, err := setup(domainFlag, groupFlag, fromFlag, toFlag, memberFlag, skipFlag)
 	if err != nil {
 		log.Fatal(err)
@@ -66,14 +78,26 @@ func main() {
 		client.Cache(time.Duration(cacheSecondsFlag) * time.Second)
 	}
 
+	var (
+		ctx    context.Context
+		cancel context.CancelFunc
+	)
+	if !timeoutSecondsFlag.Inf && timeoutSecondsFlag.Value != 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(timeoutSecondsFlag.Value)*time.Second)
+	} else {
+		ctx, cancel = context.WithCancel(context.Background())
+	}
+
+	defer cancel()
+
 	if loopFlag.Inf {
 		for loop := uint(0); ; loop++ {
-			run(domain, loop, minFlag, client, connections)
+			run(ctx, domain, loop, minFlag, client, connections)
 			time.Sleep(time.Duration(delaySecondsFlag) * time.Second)
 		}
 	} else {
 		for loop := uint(0); loop < loopFlag.Value; loop++ {
-			run(domain, loop, minFlag, client, connections)
+			run(ctx, domain, loop, minFlag, client, connections)
 			if loop+1 < loopFlag.Value {
 				fmt.Println("")
 				time.Sleep(time.Duration(delaySecondsFlag) * time.Second)
@@ -82,7 +106,7 @@ func main() {
 	}
 }
 
-func run(domain string, iteration uint, min uint, client *helper.Client, connections []core.Backlog) {
+func run(ctx context.Context, domain string, iteration uint, min uint, client *helper.Client, connections []core.Backlog) {
 	var wg sync.WaitGroup
 	wg.Add(len(connections))
 
@@ -93,7 +117,7 @@ func run(domain string, iteration uint, min uint, client *helper.Client, connect
 	start := time.Now()
 
 	for i := 0; i < len(connections); i++ {
-		go computeBacklog(client, &connections[i], &wg)
+		go computeBacklog(ctx, client, &connections[i], &wg)
 	}
 
 	wg.Wait()
@@ -192,9 +216,9 @@ func setup(domain string, groupRegex, fromRegex, toRegex, memberRegex, skipRegex
 	return
 }
 
-func computeBacklog(client *helper.Client, backlog *core.Backlog, wg *sync.WaitGroup) {
+func computeBacklog(ctx context.Context, client *helper.Client, backlog *core.Backlog, wg *sync.WaitGroup) {
 	var values []int
-	values, backlog.Call, backlog.Err = client.Backlog(backlog.From, backlog.To, *backlog.Group.ID)
+	values, backlog.Call, backlog.Err = client.Backlog(ctx, backlog.From, backlog.To, *backlog.Group.ID)
 	if n := len(values); n == len(backlog.Group.Folders) {
 		backlog.Folders = make([]core.FolderBacklog, n)
 		for v := 0; v < n; v++ {
