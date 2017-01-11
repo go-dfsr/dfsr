@@ -12,6 +12,8 @@ const (
 )
 
 var (
+	// ErrDisconnected is returned when a server is offline.
+	ErrDisconnected = errors.New("The server is disconnected or offline.")
 	// ErrClosed is returned from calls to a service or interface in the event
 	// that the Close() function has already been called.
 	ErrClosed = errors.New("Interface is closing or already closed.")

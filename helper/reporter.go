@@ -131,8 +131,7 @@ func (r *reporter) Backlog(ctx context.Context, vector *versionvector.Vector) (b
 	return
 }
 
-// Report generates a report when compared against the given
-// reference version vector.
+// Report generates a report when compared against the reference version vector.
 func (r *reporter) Report(ctx context.Context, group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
 	if backlog && vector == nil {
 		call.Description = "Reporter.Report"

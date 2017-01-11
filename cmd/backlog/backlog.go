@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -47,6 +48,8 @@ func init() {
 	flag.Var(&skipFlag, "skip", "regex of hostname to skip")
 	flag.UintVar(&minFlag, "min", 0, "minimum backlog to display")
 	flag.BoolVar(&verboseFlag, "v", false, "verbose")
+
+	rand.Seed(time.Now().UnixNano())
 }
 
 func main() {
@@ -69,15 +72,33 @@ func main() {
 		log.Fatal(err)
 	}
 
-	client, err := helper.NewClient()
-	if err != nil {
-		log.Fatal(err)
-	}
+	config := helper.DefaultEndpointConfig
 
 	if cacheSecondsFlag > 0 {
-		client.Cache(time.Duration(cacheSecondsFlag) * time.Second)
+		config.Caching = true
+		config.CacheDuration = time.Duration(cacheSecondsFlag) * time.Second
 	}
+	config.OfflineReconnectionInterval = time.Second * 60
 
+	client := helper.NewClientWithConfig(config)
+
+	if loopFlag.Inf {
+		for loop := uint(0); ; loop++ {
+			run(domain, loop, minFlag, client, connections)
+			time.Sleep(time.Duration(delaySecondsFlag) * time.Second)
+		}
+	} else {
+		for loop := uint(0); loop < loopFlag.Value; loop++ {
+			run(domain, loop, minFlag, client, connections)
+			if loop+1 < loopFlag.Value {
+				fmt.Println("")
+				time.Sleep(time.Duration(delaySecondsFlag) * time.Second)
+			}
+		}
+	}
+}
+
+func run(domain string, iteration uint, min uint, client *helper.Client, connections []core.Backlog) {
 	var (
 		ctx    context.Context
 		cancel context.CancelFunc
@@ -90,23 +111,6 @@ func main() {
 
 	defer cancel()
 
-	if loopFlag.Inf {
-		for loop := uint(0); ; loop++ {
-			run(ctx, domain, loop, minFlag, client, connections)
-			time.Sleep(time.Duration(delaySecondsFlag) * time.Second)
-		}
-	} else {
-		for loop := uint(0); loop < loopFlag.Value; loop++ {
-			run(ctx, domain, loop, minFlag, client, connections)
-			if loop+1 < loopFlag.Value {
-				fmt.Println("")
-				time.Sleep(time.Duration(delaySecondsFlag) * time.Second)
-			}
-		}
-	}
-}
-
-func run(ctx context.Context, domain string, iteration uint, min uint, client *helper.Client, connections []core.Backlog) {
 	var wg sync.WaitGroup
 	wg.Add(len(connections))
 

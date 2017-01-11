@@ -75,17 +75,23 @@ func (m *Monitor) Start() error {
 		return nil // Already running
 	}
 
-	client, err := helper.NewClient()
-	if err != nil {
-		return err
-	}
-	client.Recovery(helper.DefaultRecoveryInterval)
+	config := helper.DefaultEndpointConfig
+
 	if m.cache > time.Duration(0) {
-		client.Cache(m.cache)
+		config.Caching = true
+		config.CacheDuration = m.cache
+	} else {
+		config.Caching = false
 	}
+
 	if m.limit > 0 {
-		client.Limit(m.limit)
+		config.Limiting = true
+		config.Limit = m.limit
+	} else {
+		config.Limiting = false
 	}
+
+	client := helper.NewClientWithConfig(config)
 
 	m.instance = poller.New(&worker{
 		client: client,

@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/go-ole/go-ole"
 	"gopkg.in/dfsr.v0/callstat"
@@ -15,87 +14,67 @@ import (
 // and report information. It maintains an expiring cache of version vectors
 // and attempts to manage DFSR queries in such a way that they do not overburden
 // the target servers.
+//
+// Client maintains an internal map of DFSR endpoints and monitors their health.
+// Queries against endpoints that are known to be offline will return a failure
+// immediately.
 type Client struct {
-	m                sync.RWMutex
-	caching          bool
-	cacheDuration    time.Duration
-	limiting         bool
-	limit            uint
-	durable          bool
-	recoveryInterval time.Duration
-	retries          uint
-	servers          map[string]Reporter // Maps lower-case FQDNs to the Reporter inferface for each server
+	mutex     sync.RWMutex
+	config    EndpointConfig
+	endpoints map[string]*Endpoint // Maps lower-case FQDNs to the Reporter inferface for each server
 }
 
 // NewClient creates a new Client that is capable of querying DFSR members via
-// the DFSR Helper protocol. The returned Client will not cache version vectors.
-func NewClient() (*Client, error) {
+// the DFSR Helper protocol. The returned Client will use the configuration
+// values present in DefaultEndpointConfiguration.
+func NewClient(config EndpointConfig) *Client {
+	return NewClientWithConfig(DefaultEndpointConfig)
+}
+
+// NewClientWithConfig creates a new Client that is capable of querying DFSR
+// members via the DFSR Helper protocol. The returned Client will use the
+// provided endpoint configuration values.
+func NewClientWithConfig(config EndpointConfig) *Client {
 	return &Client{
-		recoveryInterval: DefaultRecoveryInterval,
-		servers:          make(map[string]Reporter),
-	}, nil
+		config:    config,
+		endpoints: make(map[string]*Endpoint),
+	}
 }
 
-// Cache instructs the client to cache retrieved version vectors for the given
-// duration.
-//
-// Cache must be called before calling any of the client query functions.
-func (c *Client) Cache(duration time.Duration) {
-	c.m.Lock()
-	c.caching = true
-	c.cacheDuration = duration
-	c.m.Unlock()
+// Config returns the current configuration of the client.
+func (c *Client) Config() (config EndpointConfig) {
+	c.mutex.RLock()
+	config = c.config
+	c.mutex.RUnlock()
+	return
 }
 
-// Limit instructs the client to limit the maximum number of simultaneous
-// workers that will talk to a server.
-//
-// Limit must be called before calling any of the client query functions.
-func (c *Client) Limit(workers uint) {
-	c.m.Lock()
-	c.limiting = true
-	c.limit = workers
-	c.m.Unlock()
-}
-
-// Recovery instructs the client to attempt to recover from failed RPC
-// connections by closing and reopening them when an error occurs. The provided
-// interval specifies the minimum time that must pass between reconnection
-// attempts.
-//
-// Recovery must be called before calling any of the client query functions.
-func (c *Client) Recovery(interval time.Duration) {
-	c.m.Lock()
-	c.durable = true
-	c.recoveryInterval = interval
-	c.m.Unlock()
-}
-
-// Retries instructs the client to retry failed calls the specified number of
-// times, which may be zero.
-//
-// Retries must be called before calling any of the client query functions.
-//
-// Calling retries without calling recovery implies recovery with an interval of
-// DefaultRecoveryInterval.
-func (c *Client) Retries(retries uint) {
-	c.m.Lock()
-	c.durable = true
-	c.retries = retries
-	c.m.Unlock()
+// UpdateConfig updates the client configuration.
+func (c *Client) UpdateConfig(config EndpointConfig) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	c.config = config
+	if c.endpoints == nil {
+		return // Already closed
+	}
+	for _, e := range c.endpoints {
+		// TODO: Close in parallel
+		e.UpdateConfig(config)
+	}
 }
 
 // Close will release any resources consumed by the Client.
 func (c *Client) Close() {
-	c.m.Lock()
-	defer c.m.Unlock()
-	if c.servers == nil {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	if c.endpoints == nil {
 		return // Already closed
 	}
-	for _, r := range c.servers {
-		r.Close()
+	for _, e := range c.endpoints {
+		// TODO: Close in parallel
+		e.Close()
 	}
-	c.servers = nil
+	c.endpoints = nil
 }
 
 // Backlog returns the outgoing backlog from one DSFR member to another. The
@@ -105,12 +84,12 @@ func (c *Client) Backlog(ctx context.Context, from, to string, group ole.GUID) (
 	call.Begin("Client.Backlog")
 	defer call.Complete(err)
 
-	f, err := c.server(from)
+	f, err := c.endpoint(from)
 	if err != nil {
 		return
 	}
 
-	t, err := c.server(to)
+	t, err := c.endpoint(to)
 	if err != nil {
 		return
 	}
@@ -127,19 +106,19 @@ func (c *Client) Backlog(ctx context.Context, from, to string, group ole.GUID) (
 	return
 }
 
-// Vector returns the current referece version vector for the specified
-// replication group on requested DFSR member. The member is identified by its
-// fully qualified domain name.
+// Vector returns the current reference version vector of the requested
+// replication group on the specified DFSR member. The member is identified by
+// its fully qualified domain name.
 func (c *Client) Vector(ctx context.Context, server string, group *ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error) {
 	call.Begin("Client.Vector")
 	defer call.Complete(err)
 
-	s, err := c.server(server)
+	e, err := c.endpoint(server)
 	if err != nil {
 		return
 	}
 
-	vector, vcall, err := s.Vector(ctx, *group)
+	vector, vcall, err := e.Vector(ctx, *group)
 	call.Add(&vcall)
 	return
 }
@@ -149,66 +128,42 @@ func (c *Client) Report(ctx context.Context, server string, group *ole.GUID, vec
 	call.Begin("Client.Report")
 	defer call.Complete(err)
 
-	s, err := c.server(server)
+	e, err := c.endpoint(server)
 	if err != nil {
 		return
 	}
 
-	data, report, rcall, err := s.Report(ctx, group, vector, backlog, files)
+	data, report, rcall, err := e.Report(ctx, group, vector, backlog, files)
 	call.Add(&rcall)
 	return
 }
 
-func (c *Client) server(fqdn string) (r Reporter, err error) {
+func (c *Client) endpoint(fqdn string) (*Endpoint, error) {
 	fqdn = strings.ToLower(fqdn)
 
 	// Existing entries
-	c.m.RLock()
-	if c.servers == nil {
-		c.m.RUnlock()
+	c.mutex.RLock()
+	if c.endpoints == nil {
+		c.mutex.RUnlock()
 		return nil, ErrClosed
 	}
-	r, found := c.servers[fqdn]
-	c.m.RUnlock()
+	e, found := c.endpoints[fqdn]
+	c.mutex.RUnlock()
 	if found {
-		return r, nil
+		return e, nil
 	}
 
 	// New entries
-	c.m.Lock()
-	defer c.m.Unlock()
-	if c.servers == nil {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	if c.endpoints == nil {
 		return nil, ErrClosed
 	}
-	r, found = c.servers[fqdn]
+	e, found = c.endpoints[fqdn]
 	if found {
-		return r, nil
+		return e, nil
 	}
-	r, err = c.create(fqdn)
-	if err != nil {
-		return
-	}
-	c.servers[fqdn] = r
-	return
-}
-
-func (c *Client) create(fqdn string) (r Reporter, err error) {
-	if c.durable {
-		r, err = NewDurableReporter(fqdn, c.recoveryInterval, c.retries)
-	} else {
-		r, err = NewReporter(fqdn)
-	}
-	if err != nil {
-		return
-	}
-	if c.limiting {
-		r, err = NewLimiter(r, c.limit)
-		if err != nil {
-			return
-		}
-	}
-	if c.caching {
-		r = NewCacher(r, c.cacheDuration)
-	}
-	return
+	e = NewEndpoint(fqdn, c.config)
+	c.endpoints[fqdn] = e
+	return e, nil
 }
