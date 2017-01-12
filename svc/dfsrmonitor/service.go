@@ -6,6 +6,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"strconv"
 	"time"
 
 	"gopkg.in/dfsr.v0/config"
@@ -22,6 +23,8 @@ var elog debug.Log
 type dfsrmonitor struct{}
 
 const acceptedCmds = svc.AcceptStop | svc.AcceptShutdown | svc.AcceptPauseAndContinue
+
+const updateChanSize = 16
 
 func (m *dfsrmonitor) Execute(args []string, r <-chan svc.ChangeRequest, changes chan<- svc.Status) (ssec bool, errno uint32) {
 	changes <- svc.Status{State: svc.StartPending}
@@ -54,11 +57,11 @@ func (m *dfsrmonitor) Execute(args []string, r <-chan svc.ChangeRequest, changes
 	// Step 3: Create backlog monitor
 	elog.Info(EventInitProgress, "Creating backlog monitor.")
 	mon := monitor.New(cfg, settings.BacklogPollingInterval, settings.VectorCacheDuration, settings.Limit)
-	monChan := mon.Listen(16)
+	monChan := mon.Listen(updateChanSize)
 
 	// Step 4: Create backlog consumers
 	if settings.StatHatKey != "" {
-		stathatconsumer.New(settings.StatHatKey, settings.StatHatFormat, mon.Listen(16))
+		stathatconsumer.New(settings.StatHatKey, settings.StatHatFormat, mon.Listen(updateChanSize))
 	}
 
 	// Step 5: Start backlog monitor
@@ -143,16 +146,22 @@ func runService(env *Environment) {
 }
 
 func watchUpdate(update *monitor.Update) {
+	var (
+		i, size = 0, update.Size()
+		len     = len(strconv.Itoa(size))
+	)
+
 	elog.Info(1, fmt.Sprintf("Polling started at %v", update.Start()))
 	for backlog := range update.Listen() {
+		i++
 		if backlog.Err != nil {
 			if !isCancellationErr(backlog.Err) {
-				elog.Warning(1, fmt.Sprintf("[%s] Backlog from %s to %s: %v", backlog.Group.Name, backlog.From, backlog.To, backlog.Err))
+				elog.Warning(1, fmt.Sprintf("[%*d/%*d] %s backlog from %s to %s: %v", len, i, len, size, backlog.Group.Name, backlog.From, backlog.To, backlog.Err))
 			}
 			continue
 		}
 		if !backlog.IsZero() {
-			elog.Info(1, fmt.Sprintf("[%s] Backlog from %s to %s: %v", backlog.Group.Name, backlog.From, backlog.To, backlog.Sum()))
+			elog.Info(1, fmt.Sprintf("[%*d/%*d] %s backlog from %s to %s: %v", len, i, len, size, backlog.Group.Name, backlog.From, backlog.To, backlog.Sum()))
 		}
 	}
 	elog.Info(1, fmt.Sprintf("Polling finished at %v. Total wall time: %v", update.End(), update.Duration()))
