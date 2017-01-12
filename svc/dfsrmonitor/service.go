@@ -6,6 +6,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
 	"strconv"
 	"time"
 
@@ -34,8 +35,13 @@ func (m *dfsrmonitor) Execute(args []string, r <-chan svc.ChangeRequest, changes
 	// Step 1: Parse settings
 	settings := environment.Settings
 	if !environment.IsInteractive {
+		elog.Info(1, fmt.Sprintf("OS Args: %v", os.Args))
 		elog.Info(1, fmt.Sprintf("Service Args: %v", args))
-		settings.Parse(args[1:], flag.ExitOnError)
+		if len(args) > 1 {
+			settings.Parse(args[1:], flag.ExitOnError)
+		} else if len(os.Args) > 1 {
+			settings.Parse(os.Args[1:], flag.ExitOnError)
+		}
 		elog.Info(1, fmt.Sprintf("Service Settings: %+v", settings))
 	}
 

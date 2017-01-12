@@ -45,9 +45,6 @@ Run `dfsrmonitor debug` to test the monitor as a command line program.
 
 **TODO**: Provide example installation commands
 
-**KNOWN BUG**: The installed Windows service does not currently start with the
-               parameters specified during installation.
-
 ### Windows Service Access Control Configuration
 
 Microsoft's guidance regarding privileges needed to calculate backlogs is to
