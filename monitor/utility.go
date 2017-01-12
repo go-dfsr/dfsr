@@ -1,6 +1,10 @@
 package monitor
 
-import "gopkg.in/dfsr.v0/core"
+import (
+	"context"
+
+	"gopkg.in/dfsr.v0/core"
+)
 
 func connections(domain *core.Domain) (output []*core.Backlog) {
 	for gi := 0; gi < len(domain.Groups); gi++ {
@@ -32,4 +36,17 @@ func connections(domain *core.Domain) (output []*core.Backlog) {
 		}
 	}
 	return
+}
+
+func cancelRequested(ctx context.Context) bool {
+	if ctx == nil {
+		panic("nil context")
+	}
+
+	select {
+	case <-ctx.Done():
+		return true
+	default:
+		return false
+	}
 }

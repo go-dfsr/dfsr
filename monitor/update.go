@@ -12,24 +12,31 @@ type Update struct {
 	Domain *core.Domain // Domain configuration at the time of the update
 	//Connections []Connection
 
-	size     int // Size is the number of backlog entries to be received in this update
-	start    time.Time
-	end      time.Time
-	received sync.WaitGroup // Have we received all of the backlog values?
-	started  sync.WaitGroup // Have we received the start time?
-	ended    sync.WaitGroup // Have we received the end time?
+	size    int            // Number of backlog entries to be received in this update
+	start   time.Time      // "locked" until started.Done()
+	end     time.Time      // "locked" until ended.Done()
+	started sync.WaitGroup // Have we received the start time?
+	ended   sync.WaitGroup // Have we received the end time?
 
 	mutex     sync.Mutex
+	canceled  bool            // Has the update been canceled?
+	values    []*core.Backlog // "locked" until received.Done()
+	received  sync.WaitGroup  // Have we received all of the backlog values?
+	remaining int             // Number of backlog entries that have yet to be received for this update
 	listeners []updateListener
-	values    []*core.Backlog
 }
 
 // Listen returns a channel that receives the DFSR backlog values as they are
-// retrieved for this update. The values are returned in the order that they
-// are received.
+// retrieved for this update, in no particular order.
 //
-// The returned channel will be buffered with a capacity that matches the number
-// of values that will be returned in this update.
+// The returned channel will be buffered with sufficient capacity to hold the
+// maximum number of values that could be returned. Once all of the values for
+// this update have been sent the channel will be closed. This makes the
+// channel suitable for consumption with range:
+//
+//   for backlog := range update.Listen() {
+//     log.Printf("Backlog retrieved: %d", backlog.Sum())
+//   }
 func (u *Update) Listen() <-chan *core.Backlog {
 	ch := make(chan *core.Backlog, u.size)
 	if u.size == 0 {
@@ -38,18 +45,22 @@ func (u *Update) Listen() <-chan *core.Backlog {
 	}
 
 	u.mutex.Lock()
-	e := len(u.listeners)
-	u.listeners = append(u.listeners, updateListener{})
-	u.listeners[e].init(ch, u.size)
-	values := u.values[0:len(u.values)] // Snapshot of values
-	u.mutex.Unlock()
+	defer u.mutex.Unlock()
 
 	// Send the values that we've already received
-	go func() {
-		for _, v := range values {
-			ch <- v
-		}
-	}()
+	for _, v := range u.values {
+		ch <- v
+	}
+
+	if u.canceled {
+		close(ch)
+		return ch
+	}
+
+	i := len(u.listeners)
+	u.listeners = append(u.listeners, updateListener{})
+	u.listeners[i].init(ch, u.remaining)
+
 	return ch
 }
 
@@ -60,7 +71,9 @@ func (u *Update) Values() (values []*core.Backlog) {
 	return u.values
 }
 
-// Size returns the number of values that will be returned in the update.
+// Size returns the number of values that will be returned in the update if it
+// completes successfully. If the update is canceled the actual number of values
+// returned may be less than this number.
 func (u *Update) Size() int {
 	return u.size
 }
@@ -89,6 +102,7 @@ func newUpdate(domain *core.Domain, size int) *Update {
 	u := &Update{
 		Domain:    domain,
 		size:      size,
+		remaining: size,
 		listeners: make([]updateListener, 0, 2),
 		values:    make([]*core.Backlog, 0, size),
 	}
@@ -100,19 +114,54 @@ func newUpdate(domain *core.Domain, size int) *Update {
 
 func (u *Update) send(backlog *core.Backlog) {
 	u.mutex.Lock()
-	u.values = append(u.values, backlog)
+
+	if u.canceled {
+		u.mutex.Unlock()
+		return
+	}
+
+	if u.remaining == 0 {
+		panic("backlog data is being sent to an update that has finished receiving data")
+	}
+
 	listeners := u.listeners[0:len(u.listeners)] // Snapshot of listeners
+
+	u.values = append(u.values, backlog)
+	u.received.Done()
+	u.remaining--
+
+	if u.remaining == 0 {
+		// The listeners are no longer needed so let them be cleaned up by the
+		// garbage collector even if the update sticks around.
+		u.listeners = nil
+	}
+
 	u.mutex.Unlock()
 
-	u.received.Done()
+	for i := range listeners {
+		go listeners[i].send(backlog)
+	}
+}
 
-	go func() {
-		for i := range listeners {
-			listener := &listeners[i]
-			listener.ch <- backlog
-			listener.wg.Done()
-		}
-	}()
+func (u *Update) cancel() {
+	u.mutex.Lock()
+
+	if u.canceled || u.remaining == 0 {
+		u.mutex.Unlock()
+		return
+	}
+
+	listeners := u.listeners // Snapshot of listeners
+
+	u.canceled = true
+	u.listeners = nil
+	u.received.Add(-u.remaining)
+
+	u.mutex.Unlock()
+
+	for i := range listeners {
+		go listeners[i].cancel()
+	}
 }
 
 func (u *Update) setStart(t time.Time) {
@@ -126,15 +175,37 @@ func (u *Update) setEnd(t time.Time) {
 }
 
 type updateListener struct {
-	ch chan<- *core.Backlog
-	wg sync.WaitGroup
+	mutex     *sync.Mutex
+	ch        chan<- *core.Backlog
+	remaining int
 }
 
-func (ue *updateListener) init(ch chan<- *core.Backlog, size int) {
-	ue.ch = ch
-	ue.wg.Add(size)
-	go func() {
-		ue.wg.Wait()
-		close(ch)
-	}()
+func (ul *updateListener) init(ch chan<- *core.Backlog, remaining int) {
+	ul.mutex = new(sync.Mutex)
+	ul.ch = ch
+	ul.remaining = remaining
+}
+
+func (ul *updateListener) send(backlog *core.Backlog) {
+	ul.mutex.Lock()
+	defer ul.mutex.Unlock()
+	if ul.ch == nil {
+		return // Already done or canceled
+	}
+	ul.ch <- backlog
+	ul.remaining--
+	if ul.remaining == 0 {
+		close(ul.ch)
+		ul.ch = nil
+	}
+}
+
+func (ul *updateListener) cancel() {
+	ul.mutex.Lock()
+	defer ul.mutex.Unlock()
+	if ul.ch == nil {
+		return // Already done or canceled
+	}
+	close(ul.ch)
+	ul.ch = nil
 }

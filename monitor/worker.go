@@ -25,6 +25,11 @@ func (w *worker) Close() {
 }
 
 func (w *worker) Poll(ctx context.Context) {
+	if cancelRequested(ctx) {
+		return
+	}
+
+	// Build the list of connections
 	domain, _, err := w.source.Value()
 	if err != nil {
 		return
@@ -34,11 +39,18 @@ func (w *worker) Poll(ctx context.Context) {
 	if len(conns) == 0 {
 		return
 	}
-	size := len(conns)
 
-	updates := w.bc.Broadcast(domain, size)
+	if cancelRequested(ctx) {
+		return
+	}
 
-	var computed, sent sync.WaitGroup
+	// Run the backlog computations
+	var (
+		computed, sent sync.WaitGroup
+		size           = len(conns)
+		updates        = w.bc.Broadcast(domain, size)
+	)
+
 	computed.Add(size)
 	sent.Add(size)
 
@@ -63,11 +75,13 @@ func (w *worker) Poll(ctx context.Context) {
 }
 
 func (w *worker) compute(ctx context.Context, backlog *core.Backlog, updates []*Update, computed, sent *sync.WaitGroup) {
-	if ctx == nil {
-		panic("nil context")
+	if cancelRequested(ctx) {
+		computed.Done()
+		sent.Done()
+		return
 	}
-	var values []int
 
+	var values []int
 	values, backlog.Call, backlog.Err = w.client.Backlog(ctx, backlog.From, backlog.To, *backlog.Group.ID)
 	computed.Done()
 
