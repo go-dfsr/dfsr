@@ -13,7 +13,7 @@ import (
 // NewIServerHealthReport2 returns a new instance of the IServerHealthReport2
 // component object model interface.
 //
-// In a typical use case, the provided clsid should CLSID_DFSRHelper
+// In a typical use case, the provided clsid should be CLSID_DFSRHelper
 func NewIServerHealthReport2(server string, clsid *ole.GUID) (*IServerHealthReport2, error) {
 	p, err := comutil.CreateRemoteObject(server, clsid, IID_IServerHealthReport2)
 	return (*IServerHealthReport2)(unsafe.Pointer(p)), err
