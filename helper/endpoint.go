@@ -385,8 +385,10 @@ func createEndpointConnection(fqdn string, config EndpointConfig) (r Reporter, t
 	}
 
 	if config.Limiting {
+		rep := r
 		r, err = NewLimiter(r, config.Limit)
 		if err != nil {
+			rep.Close()
 			return
 		}
 	}
