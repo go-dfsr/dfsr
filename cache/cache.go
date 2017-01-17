@@ -221,16 +221,19 @@ func (cache *Cache) pend(ctx context.Context, k Key) (p *pendingEntry) {
 }
 
 func (cache *Cache) retrieve(ctx context.Context, k Key, p *pendingEntry) {
+	// Handle cancellation
+	select {
+	case <-ctx.Done():
+		p.Err = ctx.Err()
+		return
+	default:
+	}
+
 	p.Value, p.Err = cache.lookup(ctx, k) // This may block for some time
 	now := time.Now()
+
 	cache.m.Lock()
-	if cache.closed() {
-		if p.Err == nil {
-			release(p.Value)
-		}
-		p.Value = nil
-		p.Err = ErrClosed
-	} else {
+	if !cache.closed() {
 		if p.Err == nil {
 			cache.set(now, k, p.Value)
 		}
