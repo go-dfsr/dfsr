@@ -47,7 +47,7 @@ func (m *dfsrmonitor) Execute(args []string, r <-chan svc.ChangeRequest, changes
 
 	// Step 2: Create and start configuration monitor
 	elog.Info(EventInitProgress, "Creating configuration monitor.")
-	cfg := config.NewDomainMonitor(settings.Domain, settings.ConfigPollingInterval)
+	cfg := config.NewDomainMonitor(settings.Domain, settings.ConfigPollingInterval, settings.ConfigPollingTimeout)
 	if err := cfg.Start(); err != nil {
 		elog.Error(EventInitFailure, fmt.Sprintf("Configuration initialization failure: %v", err))
 		return true, ErrConfigInitFailure
@@ -62,7 +62,7 @@ func (m *dfsrmonitor) Execute(args []string, r <-chan svc.ChangeRequest, changes
 
 	// Step 3: Create backlog monitor
 	elog.Info(EventInitProgress, "Creating backlog monitor.")
-	mon := monitor.New(cfg, settings.BacklogPollingInterval, settings.VectorCacheDuration, settings.Limit)
+	mon := monitor.New(cfg, settings.BacklogPollingInterval, settings.BacklogPollingTimeout, settings.VectorCacheDuration, settings.Limit)
 	monChan := mon.Listen(updateChanSize)
 
 	// Step 4: Create backlog consumers

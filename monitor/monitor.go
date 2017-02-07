@@ -17,6 +17,7 @@ type Monitor struct {
 	mutex    sync.Mutex
 	source   Source
 	interval time.Duration
+	timeout  time.Duration
 	cache    time.Duration
 	limit    uint
 	instance *poller.Poller
@@ -32,10 +33,11 @@ type Monitor struct {
 // queries to an individual DFSR member to the given value.
 //
 // The returned monitor will not function until start is called.
-func New(source Source, interval time.Duration, cache time.Duration, limit uint) *Monitor {
+func New(source Source, interval, timeout, cache time.Duration, limit uint) *Monitor {
 	return &Monitor{
 		source:   source,
 		interval: interval,
+		timeout:  timeout,
 		cache:    cache,
 		limit:    limit,
 	}
@@ -91,6 +93,8 @@ func (m *Monitor) Start() error {
 		config.Limiting = false
 	}
 
+	config.AcceptableCallDuration = m.timeout
+
 	client := helper.NewClientWithConfig(config)
 
 	m.instance = poller.New(&worker{
@@ -98,7 +102,7 @@ func (m *Monitor) Start() error {
 		source: m.source,
 		sink:   &m.sink,
 		bc:     &m.bc,
-	}, m.interval)
+	}, m.interval, m.timeout)
 
 	return nil
 }

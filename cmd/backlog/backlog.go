@@ -23,6 +23,7 @@ var (
 	memberFlag         regexSlice
 	loopFlag           uintOrInf
 	timeoutSecondsFlag uintOrInf
+	maxCallSecondsFlag uintOrInf
 	delaySecondsFlag   uint
 	cacheSecondsFlag   uint
 	skipFlag           regexSlice
@@ -43,6 +44,7 @@ func init() {
 	flag.Var(&memberFlag, "m", "regex of member hostname (matches either dest or source)")
 	flag.Var(&loopFlag, "loop", "number of iterations or \"infinite\"")
 	flag.Var(&timeoutSecondsFlag, "timeout", "number of seconds before timeout occurs or \"infininte\"")
+	flag.Var(&maxCallSecondsFlag, "unresponsive", "maximum number of seconds before an individual call is considered unresponsive or \"infininte\"")
 	flag.UintVar(&delaySecondsFlag, "delay", 5, "number of seconds to delay between loops")
 	flag.UintVar(&cacheSecondsFlag, "cache", 5, "number of seconds to cache vectors")
 	flag.Var(&skipFlag, "skip", "regex of hostname to skip")
@@ -72,15 +74,19 @@ func main() {
 		log.Fatal(err)
 	}
 
-	config := helper.DefaultEndpointConfig
+	cfg := helper.DefaultEndpointConfig
+
+	if maxCallSecondsFlag.Present {
+		cfg.AcceptableCallDuration = time.Second * time.Duration(maxCallSecondsFlag.Value)
+	}
 
 	if cacheSecondsFlag > 0 {
-		config.Caching = true
-		config.CacheDuration = time.Duration(cacheSecondsFlag) * time.Second
+		cfg.Caching = true
+		cfg.CacheDuration = time.Duration(cacheSecondsFlag) * time.Second
 	}
-	config.OfflineReconnectionInterval = time.Second * 60
+	cfg.OfflineReconnectionInterval = time.Second * 60
 
-	client := helper.NewClientWithConfig(config)
+	client := helper.NewClientWithConfig(cfg)
 
 	if loopFlag.Inf {
 		for loop := uint(0); ; loop++ {

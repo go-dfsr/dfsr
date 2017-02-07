@@ -100,6 +100,7 @@ type DomainMonitor struct {
 	mutex    sync.Mutex
 	domain   string
 	interval time.Duration
+	timeout  time.Duration
 	instance *poller.Poller
 	closed   bool
 }
@@ -108,10 +109,11 @@ type DomainMonitor struct {
 // Directory for updated DFSR configuration for a domain. If the provided domain
 // is an empty string the monitor will attempt to use the the domain of the
 // computer it is running on by querying the root domain naming context.
-func NewDomainMonitor(domain string, interval time.Duration) *DomainMonitor {
+func NewDomainMonitor(domain string, interval, timeout time.Duration) *DomainMonitor {
 	m := &DomainMonitor{
 		domain:   domain,
 		interval: interval,
+		timeout:  timeout,
 	}
 	return m
 }
@@ -171,7 +173,7 @@ func (m *DomainMonitor) Start() error {
 		domain: m.domain,
 		sink:   &m.sink,
 		bc:     &m.bc,
-	}, m.interval)
+	}, m.interval, m.timeout)
 
 	return nil
 }

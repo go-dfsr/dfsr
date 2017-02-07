@@ -5,8 +5,16 @@ import (
 
 	"gopkg.in/dfsr.v0/callstat"
 
+	"github.com/gentlemanautomaton/calltracker"
 	"github.com/go-ole/go-ole"
 )
+
+// Tracker represents a call state tracker.
+type Tracker interface {
+	Add() (call calltracker.TrackedCall)
+	Value() (value calltracker.Value)
+	Subscribe(s calltracker.Subscriber)
+}
 
 // NamingContext represents an active directory naming context.
 type NamingContext struct {

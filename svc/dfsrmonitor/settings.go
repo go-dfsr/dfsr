@@ -14,7 +14,9 @@ import (
 type Settings struct {
 	Domain                 string
 	ConfigPollingInterval  time.Duration
+	ConfigPollingTimeout   time.Duration
 	BacklogPollingInterval time.Duration
+	BacklogPollingTimeout  time.Duration
 	VectorCacheDuration    time.Duration
 	Limit                  uint
 	StatHatKey             string
@@ -24,7 +26,9 @@ type Settings struct {
 // DefaultSettings is the default set of DFSR monitor settings.
 var DefaultSettings = Settings{
 	ConfigPollingInterval:  15 * time.Minute,
+	ConfigPollingTimeout:   2 * time.Minute,
 	BacklogPollingInterval: 5 * time.Minute,
+	BacklogPollingTimeout:  5 * time.Minute,
 	VectorCacheDuration:    30 * time.Second,
 	Limit:                  1,
 }
@@ -33,7 +37,9 @@ var DefaultSettings = Settings{
 func (s *Settings) Bind(fs *flag.FlagSet) {
 	fs.Var(bindflag.String(&s.Domain), "domain", "AD domain to monitor (will autodetect if not provided)")
 	fs.Var(bindflag.Duration(&s.ConfigPollingInterval), "cpi", "configuration polling interval")
+	fs.Var(bindflag.Duration(&s.ConfigPollingTimeout), "cpt", "configuration polling timeout")
 	fs.Var(bindflag.Duration(&s.BacklogPollingInterval), "bpi", "backlog polling interval")
+	fs.Var(bindflag.Duration(&s.BacklogPollingTimeout), "bpt", "backlog polling timeout")
 	fs.Var(bindflag.Duration(&s.VectorCacheDuration), "cache", "vector cache duration")
 	fs.Var(bindflag.Uint(&s.Limit), "limit", "maximum number of queries per server")
 	fs.Var(bindflag.String(&s.StatHatKey), "shk", "StatHat ezkey for StatHat reporting")
@@ -56,8 +62,14 @@ func (s *Settings) Args() (args []string) {
 	if s.ConfigPollingInterval != time.Duration(0) {
 		args = append(args, makeArg("cpi", s.ConfigPollingInterval.String()))
 	}
+	if s.ConfigPollingTimeout != time.Duration(0) {
+		args = append(args, makeArg("cpt", s.ConfigPollingTimeout.String()))
+	}
 	if s.BacklogPollingInterval != time.Duration(0) {
 		args = append(args, makeArg("bpi", s.BacklogPollingInterval.String()))
+	}
+	if s.BacklogPollingTimeout != time.Duration(0) {
+		args = append(args, makeArg("bpt", s.BacklogPollingTimeout.String()))
 	}
 	if s.VectorCacheDuration != time.Duration(0) {
 		args = append(args, makeArg("cache", s.VectorCacheDuration.String()))

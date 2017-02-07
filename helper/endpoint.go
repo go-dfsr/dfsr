@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gentlemanautomaton/calltracker"
 	ole "github.com/go-ole/go-ole"
 	"gopkg.in/dfsr.v0/callstat"
 	"gopkg.in/dfsr.v0/versionvector"
@@ -19,6 +20,7 @@ var DefaultEndpointConfig = EndpointConfig{
 	Limit:         1,
 	OnlineReconnectionInterval:  time.Minute * 30,
 	OfflineReconnectionInterval: time.Minute * 2,
+	AcceptableCallDuration:      time.Second * 30,
 }
 
 // EndpointConfig desribes a set of endpoint configuration parameters.
@@ -35,6 +37,7 @@ type EndpointConfig struct {
 	Limit                       uint          // Maximum number of simultaneous calls
 	OnlineReconnectionInterval  time.Duration // Time between connection attempts when endpoint is online
 	OfflineReconnectionInterval time.Duration // Time between connection attempts when endpoint is offline
+	AcceptableCallDuration      time.Duration // Maximum amount of time a remote procedure call is allowed before it is considered unresponsive
 
 	// TODO: Use ICMP pings to assess network failure
 	//PingInterval  time.Duration
@@ -45,14 +48,28 @@ type EndpointConfig struct {
 // EndpointState describes the current condition of an endpoint.
 type EndpointState struct {
 	Err       error
-	Changed   time.Time // Last time the state changed
-	Updated   time.Time // Last time the state was updated
-	IdleSince time.Time // Last time an action was performed on the endpoint
+	Changed   time.Time         // Last time the state changed
+	Updated   time.Time         // Last time the state was updated
+	IdleSince time.Time         // Last time an action was performed on the endpoint
+	Calls     calltracker.Value // Representation of outstanding calls
 }
 
 // Online returns true if the state indicates that the endpoint is online.
 func (s *EndpointState) Online() bool {
 	return s.Err == nil
+}
+
+// Unresponsive returns true if the state indicates that the endpoint is online
+// but not responding promptly to requests.
+//
+// The provided theshold is the maximum amount of time that may elapse before
+// a remote procedure call is considered unresponsive.
+func (s *EndpointState) Unresponsive(threshold time.Duration) bool {
+	if s.Calls.Len() == 0 {
+		return false
+	}
+
+	return s.Calls.MaxElapsed() > threshold
 }
 
 // Closed returns true if the state indicates that the endpoint has been closed.
@@ -62,7 +79,7 @@ func (s *EndpointState) Closed() bool {
 
 const endpointChanSize = 32
 
-var _ = (Reporter)((*Endpoint)(nil)) // Compile-time interface compliance check
+//var _ = (Reporter)((*Endpoint)(nil)) // Compile-time interface compliance check
 
 // Endpoint manages a connection to a remote or local server that implements the
 // DFSR Helper protocol. It monitors the health of the connection by checking
@@ -89,11 +106,13 @@ type Endpoint struct {
 	closed       sync.WaitGroup      // Marks the exit of run()
 	configChange chan EndpointConfig // Receives configuration updates. Consumed by run(). Closure initiates shutdown.
 	stateChange  chan EndpointState  // Receives state changes. Consumed by run(). Closure initiates shutdown.
+	tracker      calltracker.Tracker // Tracks the number and condition of outstanding remote procedure calls.
 
-	mutex  sync.RWMutex
-	config EndpointConfig
-	state  EndpointState
-	r      Reporter
+	mutex    sync.RWMutex
+	config   EndpointConfig
+	state    EndpointState
+	sequence uint64 // Last health update sequence number received
+	r        Reporter
 }
 
 // NewEndpoint creates a new endpoint and returns it without blocking. The
@@ -114,6 +133,7 @@ func NewEndpoint(fqdn string, config EndpointConfig) *Endpoint {
 	e.ready.Add(1)
 	e.closed.Add(1)
 	state := e.state
+	e.tracker.Subscribe(e.updateHealth)
 	go e.run(config, state)
 	return e
 }
@@ -177,15 +197,20 @@ func (e *Endpoint) Vector(ctx context.Context, group ole.GUID) (vector *versionv
 
 	e.ready.Wait()
 	e.mutex.RLock()
-	r, err := e.r, e.state.Err
+	r, state, threshold, err := e.r, e.state, e.config.AcceptableCallDuration, e.state.Err
 	e.mutex.RUnlock()
 
 	if err != nil {
 		return
 	}
 
+	if state.Unresponsive(threshold) {
+		err = ErrUnresponsive
+		return
+	}
+
 	var subcall callstat.Call
-	vector, subcall, err = r.Vector(ctx, group)
+	vector, subcall, err = r.Vector(ctx, group, &e.tracker)
 	call.Add(&subcall)
 
 	e.updateStateAfterCall(r, err, time.Now())
@@ -200,15 +225,20 @@ func (e *Endpoint) Backlog(ctx context.Context, vector *versionvector.Vector) (b
 
 	e.ready.Wait()
 	e.mutex.RLock()
-	r, err := e.r, e.state.Err
+	r, state, threshold, err := e.r, e.state, e.config.AcceptableCallDuration, e.state.Err
 	e.mutex.RUnlock()
 
 	if err != nil {
 		return
 	}
 
+	if state.Unresponsive(threshold) {
+		err = ErrUnresponsive
+		return
+	}
+
 	var subcall callstat.Call
-	backlog, subcall, err = r.Backlog(ctx, vector)
+	backlog, subcall, err = r.Backlog(ctx, vector, &e.tracker)
 	call.Add(&subcall)
 
 	e.updateStateAfterCall(r, err, time.Now())
@@ -251,6 +281,7 @@ func (e *Endpoint) run(config EndpointConfig, state EndpointState) {
 	defer e.closed.Done()
 
 	var (
+		//healthTimer   = time.NewTimer(0) // Triggers health evaluation to see if calls are responding quickly
 		connTimer     = time.NewTimer(0) // Triggers new connections
 		connTimestamp time.Time          // Last time the connection was reset
 		initialized   bool
@@ -308,6 +339,11 @@ func (e *Endpoint) run(config EndpointConfig, state EndpointState) {
 			} else {
 				connTimer.Reset(config.OfflineReconnectionInterval)
 			}
+			/*
+				case <-healthTimer.C:
+					go e.updateHealth()
+					healthTimer.Reset()
+			*/
 		}
 	}
 }
@@ -367,13 +403,35 @@ func (e *Endpoint) updateStateAfterCall(r Reporter, err error, when time.Time) {
 	}
 
 	if IsUnavailableErr(err) {
-		// The error is only affects the current state if it's for the current
+		// The error only affects the current state if it's for the current
 		// connection. The connection could have been reset while this call was
 		// being made.
 		if e.r == r {
 			e.updateConnectionState(err, when, true)
 		}
 	}
+}
+
+// updateHealth will update the endpoint's health state as provided by
+// its call tracker.
+func (e *Endpoint) updateHealth(update calltracker.Update) {
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+
+	if e.state.Closed() {
+		return
+	}
+
+	if e.sequence > update.Sequence {
+		// Already have newer values
+		return
+	}
+
+	e.state.Updated = time.Now()
+	e.state.Calls = update.Value
+	e.sequence = update.Sequence
+
+	e.stateChange <- e.state
 }
 
 func createEndpointConnection(fqdn string, config EndpointConfig) (r Reporter, timestamp time.Time, err error) {

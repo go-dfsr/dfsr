@@ -15,6 +15,7 @@ type Source interface {
 // Poller executes a polling function on an interval.
 type Poller struct {
 	interval time.Duration
+	timeout  time.Duration
 	source   Source
 
 	mutex  sync.Mutex
@@ -30,10 +31,11 @@ type Poller struct {
 // polling function will not run until its interval has elapsed. If immediate
 // invocation is desired the Poll function should be called immediately after
 // the poller has been created.
-func New(source Source, interval time.Duration) *Poller {
+func New(source Source, interval, timeout time.Duration) *Poller {
 	p := &Poller{
 		source:   source,
 		interval: interval,
+		timeout:  timeout,
 		pulse:    make(chan struct{}),
 		stop:     make(chan struct{}),
 	}
@@ -105,7 +107,7 @@ func (p *Poller) running() bool {
 }
 
 func (p *Poller) invoke() {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), p.timeout)
 	defer cancel()
 
 	if !p.startInvocation(cancel) {
