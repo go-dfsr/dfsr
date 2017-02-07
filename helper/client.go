@@ -27,7 +27,7 @@ type Client struct {
 // NewClient creates a new Client that is capable of querying DFSR members via
 // the DFSR Helper protocol. The returned Client will use the configuration
 // values present in DefaultEndpointConfiguration.
-func NewClient(config EndpointConfig) *Client {
+func NewClient() *Client {
 	return NewClientWithConfig(DefaultEndpointConfig)
 }
 
