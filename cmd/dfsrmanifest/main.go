@@ -34,6 +34,7 @@ func main() {
 		before       string
 		when         string
 		domain       string
+		summarize    bool
 		resolv       bool
 		domainConfig core.Domain
 	)
@@ -61,6 +62,7 @@ func main() {
 
 	switch command {
 	case "summary":
+		summarize = true
 	case "list":
 		list = true
 	case "dump":
@@ -68,6 +70,10 @@ func main() {
 		dump = true
 	default:
 		usage(fmt.Sprintf("Unknown command \"%s\".", os.Args[1]))
+	}
+
+	if list || dump {
+		fs.BoolVar(&summarize, "s", false, "Print summary after results")
 	}
 
 	fs.Usage = makeUsageFunc(fs, os.Args[0], command)
@@ -96,7 +102,7 @@ func main() {
 	}
 
 	for i, path := range paths {
-		go run(path, filter, list, dump, &domainConfig, results[i])
+		go run(path, filter, list, dump, summarize, &domainConfig, results[i])
 	}
 
 	for i := 0; i < total; i++ {
@@ -106,7 +112,7 @@ func main() {
 	}
 }
 
-func run(path string, filter manifest.Filter, list, dump bool, domain *core.Domain, output Output) {
+func run(path string, filter manifest.Filter, list, dump, summarize bool, domain *core.Domain, output Output) {
 	defer close(output)
 
 	mpath := manifest.Find(path)
@@ -116,7 +122,7 @@ func run(path string, filter manifest.Filter, list, dump bool, domain *core.Doma
 	}
 
 	output.Printf("-------- %s --------\n", mpath)
-	defer output.Printf("-------- %s --------\n", mpath)
+	//defer output.Printf("-------- %s --------\n", mpath)
 
 	m := manifest.New(mpath)
 
@@ -135,24 +141,27 @@ func run(path string, filter manifest.Filter, list, dump bool, domain *core.Doma
 			output.Printf("%v\n", err)
 			return
 		}
-		if filtered.Entries > 0 {
+	}
+
+	if summarize {
+		info, err := m.Info()
+		if err != nil {
+			output.Printf("%v\n", err)
+			return
+		}
+
+		if list && filtered.Entries > 0 {
 			output.Printf("\n")
 		}
-	}
 
-	info, err := m.Info()
-	if err != nil {
-		output.Printf("%v\n", err)
-		return
-	}
-
-	modified := info.Modified.In(time.Local).Format(time.RFC3339)
-	output.Printf("Manifest\n")
-	output.Printf("  Size: %s, Updated: %s\n", bytefmt.ByteSize(uint64(info.Size)), modified)
-	output.Printf("Manifest Data\n")
-	output.Printf("  TOTAL    %s\n", total.Summary())
-	if filter != nil {
-		output.Printf("  MATCHING %s\n", filtered.Summary())
+		modified := info.Modified.In(time.Local).Format(time.RFC3339)
+		output.Printf("Manifest\n")
+		output.Printf("  Size: %s, Updated: %s\n", bytefmt.ByteSize(uint64(info.Size)), modified)
+		output.Printf("Manifest Data\n")
+		output.Printf("  TOTAL    %s\n", total.Summary())
+		if filter != nil {
+			output.Printf("  MATCHING %s\n", filtered.Summary())
+		}
 	}
 }
 
