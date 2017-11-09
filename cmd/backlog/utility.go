@@ -1,6 +1,9 @@
 package main
 
-import "gopkg.in/adsi.v0"
+import (
+	"gopkg.in/adsi.v0"
+	"gopkg.in/dfsr.v0/dfsrflag"
+)
 
 func dnc(client *adsi.Client) (dnc string, err error) {
 	rootDSE, err := client.Open("LDAP://RootDSE")
@@ -12,7 +15,7 @@ func dnc(client *adsi.Client) (dnc string, err error) {
 	return rootDSE.AttrString("rootDomainNamingContext")
 }
 
-func isMatch(s string, rs regexSlice, emptyValue bool) bool {
+func isMatch(s string, rs dfsrflag.RegexpSlice, emptyValue bool) bool {
 	if len(rs) == 0 {
 		return emptyValue
 	}

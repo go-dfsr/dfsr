@@ -12,21 +12,22 @@ import (
 	"gopkg.in/adsi.v0"
 	"gopkg.in/dfsr.v0/config"
 	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsrflag"
 	"gopkg.in/dfsr.v0/helper"
 )
 
 var (
 	domainFlag         string
-	groupFlag          regexSlice
-	fromFlag           regexSlice
-	toFlag             regexSlice
-	memberFlag         regexSlice
-	loopFlag           uintOrInf
-	timeoutSecondsFlag uintOrInf
-	maxCallSecondsFlag uintOrInf
+	groupFlag          dfsrflag.RegexpSlice
+	fromFlag           dfsrflag.RegexpSlice
+	toFlag             dfsrflag.RegexpSlice
+	memberFlag         dfsrflag.RegexpSlice
+	loopFlag           dfsrflag.UintOrInf
+	timeoutSecondsFlag dfsrflag.UintOrInf
+	maxCallSecondsFlag dfsrflag.UintOrInf
 	delaySecondsFlag   uint
 	cacheSecondsFlag   uint
-	skipFlag           regexSlice
+	skipFlag           dfsrflag.RegexpSlice
 	minFlag            uint
 	verboseFlag        bool
 )
@@ -157,7 +158,7 @@ func run(domain string, iteration uint, min uint, client *helper.Client, connect
 	fmt.Printf("Total Time: %v\n", finish.Sub(start))
 }
 
-func setup(domain string, groupRegex, fromRegex, toRegex, memberRegex, skipRegex regexSlice) (dom string, connections []core.Backlog, err error) {
+func setup(domain string, groupRegex, fromRegex, toRegex, memberRegex, skipRegex dfsrflag.RegexpSlice) (dom string, connections []core.Backlog, err error) {
 	client, err := adsi.NewClient()
 	if err != nil {
 		return "", nil, err
