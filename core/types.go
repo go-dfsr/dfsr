@@ -1,6 +1,7 @@
 package core
 
 import (
+	"strings"
 	"time"
 
 	"gopkg.in/dfsr.v0/callstat"
@@ -30,6 +31,22 @@ type Domain struct {
 	NamingContext
 	Groups         []Group
 	ConfigDuration time.Duration // Time elapsed while retrieving configuration
+}
+
+// MemberInfoMap builds a map of members keyed by GUID. If d is nil it returns
+// a nil map.
+func (d *Domain) MemberInfoMap() MemberInfoMap {
+	if d == nil {
+		return nil
+	}
+	output := make(MemberInfoMap)
+	for g := range d.Groups {
+		for m := range d.Groups[g].Members {
+			member := &d.Groups[g].Members[m]
+			output[strings.ToLower(member.ID.String())] = member.MemberInfo
+		}
+	}
+	return output
 }
 
 /*
