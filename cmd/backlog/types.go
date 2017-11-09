@@ -16,7 +16,7 @@ func (s *regexSlice) String() string {
 }
 
 func (s *regexSlice) Set(value string) error {
-	if !strings.HasPrefix(value, "regexci") {
+	if !strings.HasPrefix(value, regexci) {
 		value = regexci + value
 	}
 	re, err := regexp.Compile(value)
