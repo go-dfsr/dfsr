@@ -22,3 +22,6 @@ _testmain.go
 *.exe
 *.test
 *.prof
+
+# In case someone wants to test manifest file detection
+DfsrPrivate
