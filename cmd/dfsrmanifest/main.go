@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/pprof"
 	"strings"
 	"time"
 
@@ -34,6 +35,8 @@ func main() {
 		before       string
 		when         string
 		domain       string
+		cpuprofile   string
+		memprofile   string
 		summarize    bool
 		resolv       bool
 		domainConfig core.Domain
@@ -46,6 +49,8 @@ func main() {
 	fs.StringVar(&before, "before", "", "end date/time (YYYY-MM-DD[ H:M:S])")
 	fs.StringVar(&when, "when", "", "day to include (today, yesterday, YYYY-MM-DD)")
 	fs.StringVar(&domain, "domain", "", "Active Directory domain to query for partner resolution")
+	fs.StringVar(&cpuprofile, "cpuprofile", "", "file to which a cpu profile will be written")
+	fs.StringVar(&memprofile, "memprofile", "", "file to which a memory profile will be written")
 	fs.BoolVar(&resolv, "r", false, "Perform partner resolution by querying Active Directory domain via ADSI")
 	fs.Usage = makeUsageFunc(fs, os.Args[0], "")
 
@@ -79,6 +84,17 @@ func main() {
 	fs.Usage = makeUsageFunc(fs, os.Args[0], command)
 	fs.Parse(args)
 
+	if cpuprofile != "" {
+		f, err := os.Create(cpuprofile)
+		if err != nil {
+			fmt.Printf("Unable to create cpu profile output file: %v\n", err)
+			os.Exit(2)
+		}
+		defer f.Close()
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
 	paths := fs.Args()
 	total := len(paths)
 	if total == 0 {
@@ -108,6 +124,18 @@ func main() {
 	for i := 0; i < total; i++ {
 		for line := range results[i] {
 			fmt.Print(line)
+		}
+		if i == 0 {
+			if memprofile != "" {
+				f, err := os.Create(memprofile)
+				if err != nil {
+					fmt.Printf("Unable to create memory profile output file: %v\n", err)
+					os.Exit(2)
+				}
+				defer f.Close()
+				pprof.WriteHeapProfile(f)
+				defer pprof.StopCPUProfile()
+			}
 		}
 	}
 }
