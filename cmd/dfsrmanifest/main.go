@@ -124,11 +124,14 @@ func run(path string, filter manifest.Filter, list, dump, summarize bool, domain
 	output.Printf("-------- %s --------\n", mpath)
 	//defer output.Printf("-------- %s --------\n", mpath)
 
-	m := manifest.New(mpath)
+	m, err := manifest.BufferedFile(mpath)
+	if err != nil {
+		output.Printf("%v\n", err)
+		return
+	}
 
 	var total, filtered manifest.Stats
 
-	var err error
 	if !list {
 		filtered, total, err = m.Stats(filter)
 		if err != nil {

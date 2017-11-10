@@ -3,7 +3,6 @@ package manifest
 import (
 	"errors"
 	"io"
-	"os"
 	"strings"
 	"sync"
 )
@@ -14,7 +13,7 @@ import (
 // should be closed.
 type Cursor struct {
 	mutex    sync.RWMutex
-	file     *os.File
+	reader   io.ReadCloser
 	decoder  *Decoder
 	resolver Resolver
 	filter   Filter
@@ -26,8 +25,8 @@ type Cursor struct {
 // file at path.
 //
 // When finished with the cursor, it is the caller's responsibiliy to close it.
-func NewCursor(path string) (*Cursor, error) {
-	return NewAdvancedCursor(path, nil, nil)
+func NewCursor(reader io.ReadCloser) *Cursor {
+	return NewAdvancedCursor(reader, nil, nil)
 }
 
 // NewAdvancedCursor returns a new cursor for the DFSR conflict and deleted
@@ -40,12 +39,8 @@ func NewCursor(path string) (*Cursor, error) {
 // host and distinguished name fields of each resource by querying the resolver.
 //
 // When finished with the cursor, it is the caller's responsibiliy to close it.
-func NewAdvancedCursor(path string, resolver Resolver, filter Filter) (*Cursor, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	return &Cursor{file: f, decoder: NewDecoder(f), resolver: resolver, filter: filter}, nil
+func NewAdvancedCursor(reader io.ReadCloser, resolver Resolver, filter Filter) *Cursor {
+	return &Cursor{reader: reader, decoder: NewDecoder(reader), resolver: resolver, filter: filter}
 }
 
 // Read returns the next resource record from the cursor. If the cursor includes
@@ -57,7 +52,7 @@ func (c *Cursor) Read() (resource Resource, err error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if c.file == nil {
+	if c.reader == nil {
 		err = errors.New("the cursor has already been closed")
 		return
 	}
@@ -91,6 +86,10 @@ func (c *Cursor) End() error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
+	if c.reader == nil {
+		return errors.New("the cursor has already been closed")
+	}
+
 	for {
 		resource, err := c.decoder.Read()
 		if err == io.EOF {
@@ -120,11 +119,11 @@ func (c *Cursor) Stats() (filtered, total Stats) {
 func (c *Cursor) Close() (err error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	if c.file == nil {
+	if c.reader == nil {
 		return
 	}
-	err = c.file.Close()
-	c.file = nil
+	err = c.reader.Close()
+	c.reader = nil
 	return
 }
 
