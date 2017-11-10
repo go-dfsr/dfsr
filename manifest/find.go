@@ -20,10 +20,10 @@ func Find(path string) string {
 	var last string
 	for path != last {
 		last = path
-		if candidate := filepath.Join(path, File); isManifest(candidate) {
+		if candidate := filepath.Join(path, StandardFile); isManifest(candidate) {
 			return candidate
 		}
-		if candidate := filepath.Join(path, Path); isManifest(candidate) {
+		if candidate := filepath.Join(path, StandardPath); isManifest(candidate) {
 			return candidate
 		}
 		path = filepath.Dir(path)
@@ -32,7 +32,7 @@ func Find(path string) string {
 }
 
 func isManifest(path string) bool {
-	if !strings.HasSuffix(strings.ToLower(path), strings.ToLower(Path)) {
+	if !strings.HasSuffix(strings.ToLower(path), strings.ToLower(StandardPath)) {
 		return false
 	}
 	fi, err := os.Stat(path)
