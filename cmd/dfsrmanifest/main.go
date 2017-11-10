@@ -17,7 +17,7 @@ import (
 	"gopkg.in/dfsr.v0/manifest"
 )
 
-const bufferSize = 67108864 // 64 mebibytes
+const bufferSize = 10240 // Lines allocated in buffered output channels
 
 func main() {
 	fs := flag.NewFlagSet("", flag.ExitOnError)
