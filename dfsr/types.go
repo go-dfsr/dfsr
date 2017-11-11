@@ -105,7 +105,7 @@ type LocalSettings struct {
 	Subscribers []Subscriber
 }
 
-// Subscriber contains the set of content set subscriptions for replication
+// Subscriber contains the set of content set subscriptions for a replication
 // group member.
 type Subscriber struct {
 	MemberReference  string
