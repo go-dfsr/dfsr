@@ -3,10 +3,10 @@ package monitor
 import (
 	"time"
 
-	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsr"
 )
 
 // Source represents a domain-wide configuration source.
 type Source interface {
-	Value() (*core.Domain, time.Time, error)
+	Value() (*dfsr.Domain, time.Time, error)
 }

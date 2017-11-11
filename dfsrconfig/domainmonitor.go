@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"gopkg.in/adsi.v0"
-	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsr"
 	"gopkg.in/dfsr.v0/poller"
 	"gopkg.in/dfsr.v0/valuesink"
 )
@@ -31,7 +31,7 @@ func (bc *domainBroadcaster) Listen() <-chan DomainUpdate {
 	return ch
 }
 
-func (bc *domainBroadcaster) Broadcast(domain *core.Domain, timestamp time.Time, err error) {
+func (bc *domainBroadcaster) Broadcast(domain *dfsr.Domain, timestamp time.Time, err error) {
 	bc.mutex.Lock()
 	defer bc.mutex.Unlock()
 
@@ -86,7 +86,7 @@ func (ds *domainSource) Close() {
 
 // DomainUpdate represents an update to domain configuration data.
 type DomainUpdate struct {
-	Domain    *core.Domain
+	Domain    *dfsr.Domain
 	Timestamp time.Time
 	Err       error
 }
@@ -191,9 +191,9 @@ func (m *DomainMonitor) Stop() {
 
 // Value returns the most recently retrieved domain configuration data, or nil
 // if it has not yet acquired any data.
-func (m *DomainMonitor) Value() (cfg *core.Domain, timestamp time.Time, err error) {
+func (m *DomainMonitor) Value() (cfg *dfsr.Domain, timestamp time.Time, err error) {
 	v, timestamp, err := m.sink.Value()
-	cfg = v.(*core.Domain)
+	cfg = v.(*dfsr.Domain)
 	return
 }
 

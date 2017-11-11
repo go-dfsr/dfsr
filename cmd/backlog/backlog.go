@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"gopkg.in/adsi.v0"
-	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsr"
 	"gopkg.in/dfsr.v0/dfsrconfig"
 	"gopkg.in/dfsr.v0/dfsrflag"
 	"gopkg.in/dfsr.v0/helper"
@@ -105,7 +105,7 @@ func main() {
 	}
 }
 
-func run(domain string, iteration uint, min uint, client *helper.Client, connections []core.Backlog) {
+func run(domain string, iteration uint, min uint, client *helper.Client, connections []dfsr.Backlog) {
 	var (
 		ctx    context.Context
 		cancel context.CancelFunc
@@ -158,7 +158,7 @@ func run(domain string, iteration uint, min uint, client *helper.Client, connect
 	fmt.Printf("Total Time: %v\n", finish.Sub(start))
 }
 
-func setup(domain string, groupRegex, fromRegex, toRegex, memberRegex, skipRegex dfsrflag.RegexpSlice) (dom string, connections []core.Backlog, err error) {
+func setup(domain string, groupRegex, fromRegex, toRegex, memberRegex, skipRegex dfsrflag.RegexpSlice) (dom string, connections []dfsr.Backlog, err error) {
 	client, err := adsi.NewClient()
 	if err != nil {
 		return "", nil, err
@@ -216,7 +216,7 @@ func setup(domain string, groupRegex, fromRegex, toRegex, memberRegex, skipRegex
 					continue
 				}
 
-				connections = append(connections, core.Backlog{
+				connections = append(connections, dfsr.Backlog{
 					Group: group,
 					From:  from,
 					To:    to,
@@ -227,11 +227,11 @@ func setup(domain string, groupRegex, fromRegex, toRegex, memberRegex, skipRegex
 	return
 }
 
-func computeBacklog(ctx context.Context, client *helper.Client, backlog *core.Backlog, wg *sync.WaitGroup) {
+func computeBacklog(ctx context.Context, client *helper.Client, backlog *dfsr.Backlog, wg *sync.WaitGroup) {
 	var values []int
 	values, backlog.Call, backlog.Err = client.Backlog(ctx, backlog.From, backlog.To, *backlog.Group.ID)
 	if n := len(values); n == len(backlog.Group.Folders) {
-		backlog.Folders = make([]core.FolderBacklog, n)
+		backlog.Folders = make([]dfsr.FolderBacklog, n)
 		for v := 0; v < n; v++ {
 			backlog.Folders[v].Folder = &backlog.Group.Folders[v]
 			backlog.Folders[v].Backlog = values[v]

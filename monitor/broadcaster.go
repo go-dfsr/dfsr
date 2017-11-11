@@ -3,7 +3,7 @@ package monitor
 import (
 	"sync"
 
-	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsr"
 )
 
 // broadcaster broadcasts backlog updates to a set of listeners.
@@ -61,7 +61,7 @@ func (bc *broadcaster) Unlisten(ch <-chan *Update) (found bool) {
 	return
 }
 
-func (bc *broadcaster) Broadcast(domain *core.Domain, size int) (updates []*Update) {
+func (bc *broadcaster) Broadcast(domain *dfsr.Domain, size int) (updates []*Update) {
 	bc.mutex.Lock()
 	defer bc.mutex.Unlock()
 

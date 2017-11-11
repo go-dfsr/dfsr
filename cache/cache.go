@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsr"
 )
 
 const cacheSize = 32
@@ -33,7 +33,7 @@ type Closer interface {
 }
 
 // Lookup defines a lookup function for retrieving new cache values.
-type Lookup func(ctx context.Context, key Key, tracker core.Tracker) (value Value, err error)
+type Lookup func(ctx context.Context, key Key, tracker dfsr.Tracker) (value Value, err error)
 
 var (
 	// ErrClosed is returned from calls to the cache or in the event that the
@@ -176,7 +176,7 @@ func (cache *Cache) value(k Key) (value Value, ok bool) {
 // performed.
 //
 // If the cache has been closed then ErrClosed will be returned.
-func (cache *Cache) Lookup(ctx context.Context, key Key, tracker core.Tracker) (value Value, err error) {
+func (cache *Cache) Lookup(ctx context.Context, key Key, tracker dfsr.Tracker) (value Value, err error) {
 	// First attempt with read lock
 	cache.m.RLock()
 	if cache.closed() {
@@ -211,7 +211,7 @@ func (cache *Cache) Lookup(ctx context.Context, key Key, tracker core.Tracker) (
 // a read/write lock on the cache during the call.
 //
 // FIXME: Correctly handle contexts when there are multiple pending callers.
-func (cache *Cache) pend(ctx context.Context, k Key, tracker core.Tracker) (p *pendingEntry) {
+func (cache *Cache) pend(ctx context.Context, k Key, tracker dfsr.Tracker) (p *pendingEntry) {
 	p, found := cache.pending[k]
 	if !found {
 		p = &pendingEntry{}
@@ -222,7 +222,7 @@ func (cache *Cache) pend(ctx context.Context, k Key, tracker core.Tracker) (p *p
 	return
 }
 
-func (cache *Cache) retrieve(ctx context.Context, k Key, p *pendingEntry, tracker core.Tracker) {
+func (cache *Cache) retrieve(ctx context.Context, k Key, p *pendingEntry, tracker dfsr.Tracker) {
 	// Handle cancellation
 	select {
 	case <-ctx.Done():

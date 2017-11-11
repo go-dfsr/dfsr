@@ -9,7 +9,7 @@ import (
 	"github.com/scjalliance/comshim"
 
 	"gopkg.in/dfsr.v0/callstat"
-	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsr"
 	"gopkg.in/dfsr.v0/helper/api"
 	"gopkg.in/dfsr.v0/versionvector"
 )
@@ -29,8 +29,8 @@ type backlogResult struct {
 // All implementations of the Reporter interface must be threadsafe.
 type Reporter interface {
 	Close()
-	Vector(ctx context.Context, group ole.GUID, tracker core.Tracker) (vector *versionvector.Vector, call callstat.Call, err error)
-	Backlog(ctx context.Context, vector *versionvector.Vector, tracker core.Tracker) (backlog []int, call callstat.Call, err error)
+	Vector(ctx context.Context, group ole.GUID, tracker dfsr.Tracker) (vector *versionvector.Vector, call callstat.Call, err error)
+	Backlog(ctx context.Context, vector *versionvector.Vector, tracker dfsr.Tracker) (backlog []int, call callstat.Call, err error)
 	Report(ctx context.Context, group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error)
 }
 
@@ -98,7 +98,7 @@ func (r *reporter) Close() {
 // running RPC calls and provides a means of detecting unresponsive hosts.
 //
 // If tracker is nil it will be ignored.
-func (r *reporter) Vector(ctx context.Context, group ole.GUID, tracker core.Tracker) (vector *versionvector.Vector, call callstat.Call, err error) {
+func (r *reporter) Vector(ctx context.Context, group ole.GUID, tracker dfsr.Tracker) (vector *versionvector.Vector, call callstat.Call, err error) {
 	r.m.Lock()
 	defer r.m.Unlock()
 	call.Begin("Reporter.Vector")
@@ -139,7 +139,7 @@ func (r *reporter) Vector(ctx context.Context, group ole.GUID, tracker core.Trac
 // own goroutine.
 //
 // If tracker is nil it will be ignored.
-func (r *reporter) vector(group ole.GUID, tracker core.Tracker) <-chan vectorResult {
+func (r *reporter) vector(group ole.GUID, tracker dfsr.Tracker) <-chan vectorResult {
 	ch := make(chan vectorResult, 1)
 	go func() {
 		defer close(ch)
@@ -180,7 +180,7 @@ func (r *reporter) vector(group ole.GUID, tracker core.Tracker) <-chan vectorRes
 // running RPC calls and provides a means of detecting unresponsive hosts.
 //
 // If tracker is nil it will be ignored.
-func (r *reporter) Backlog(ctx context.Context, vector *versionvector.Vector, tracker core.Tracker) (backlog []int, call callstat.Call, err error) {
+func (r *reporter) Backlog(ctx context.Context, vector *versionvector.Vector, tracker dfsr.Tracker) (backlog []int, call callstat.Call, err error) {
 	r.m.Lock()
 	defer r.m.Unlock()
 	call.Begin("Reporter.Backlog")
@@ -221,7 +221,7 @@ func (r *reporter) Backlog(ctx context.Context, vector *versionvector.Vector, tr
 // own goroutine.
 //
 // If tracker is nil it will be ignored.
-func (r *reporter) backlog(vector *versionvector.Vector, tracker core.Tracker) <-chan backlogResult {
+func (r *reporter) backlog(vector *versionvector.Vector, tracker dfsr.Tracker) <-chan backlogResult {
 	ch := make(chan backlogResult, 1)
 	go func() {
 		defer close(ch)

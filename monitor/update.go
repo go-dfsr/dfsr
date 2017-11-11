@@ -4,12 +4,12 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsr"
 )
 
 // Update represents an in-progress DFSR update performed by the monitor.
 type Update struct {
-	Domain *core.Domain // Domain configuration at the time of the update
+	Domain *dfsr.Domain // Domain configuration at the time of the update
 	//Connections []Connection
 
 	size    int            // Number of backlog entries to be received in this update
@@ -20,7 +20,7 @@ type Update struct {
 
 	mutex     sync.Mutex
 	canceled  bool            // Has the update been canceled?
-	values    []*core.Backlog // "locked" until received.Done()
+	values    []*dfsr.Backlog // "locked" until received.Done()
 	received  sync.WaitGroup  // Have we received all of the backlog values?
 	remaining int             // Number of backlog entries that have yet to be received for this update
 	listeners []updateListener
@@ -37,8 +37,8 @@ type Update struct {
 //   for backlog := range update.Listen() {
 //     log.Printf("Backlog retrieved: %d", backlog.Sum())
 //   }
-func (u *Update) Listen() <-chan *core.Backlog {
-	ch := make(chan *core.Backlog, u.size)
+func (u *Update) Listen() <-chan *dfsr.Backlog {
+	ch := make(chan *dfsr.Backlog, u.size)
 	if u.size == 0 {
 		close(ch)
 		return ch
@@ -66,7 +66,7 @@ func (u *Update) Listen() <-chan *core.Backlog {
 
 // Values will block until the update has finished, then return a slice of the
 // retrieved backlog data.
-func (u *Update) Values() (values []*core.Backlog) {
+func (u *Update) Values() (values []*dfsr.Backlog) {
 	u.received.Wait()
 	return u.values
 }
@@ -98,13 +98,13 @@ func (u *Update) Duration() time.Duration {
 	return u.end.Sub(u.start)
 }
 
-func newUpdate(domain *core.Domain, size int) *Update {
+func newUpdate(domain *dfsr.Domain, size int) *Update {
 	u := &Update{
 		Domain:    domain,
 		size:      size,
 		remaining: size,
 		listeners: make([]updateListener, 0, 2),
-		values:    make([]*core.Backlog, 0, size),
+		values:    make([]*dfsr.Backlog, 0, size),
 	}
 	u.received.Add(size)
 	u.started.Add(1)
@@ -112,7 +112,7 @@ func newUpdate(domain *core.Domain, size int) *Update {
 	return u
 }
 
-func (u *Update) send(backlog *core.Backlog) {
+func (u *Update) send(backlog *dfsr.Backlog) {
 	u.mutex.Lock()
 
 	if u.canceled {
@@ -176,17 +176,17 @@ func (u *Update) setEnd(t time.Time) {
 
 type updateListener struct {
 	mutex     *sync.Mutex
-	ch        chan<- *core.Backlog
+	ch        chan<- *dfsr.Backlog
 	remaining int
 }
 
-func (ul *updateListener) init(ch chan<- *core.Backlog, remaining int) {
+func (ul *updateListener) init(ch chan<- *dfsr.Backlog, remaining int) {
 	ul.mutex = new(sync.Mutex)
 	ul.ch = ch
 	ul.remaining = remaining
 }
 
-func (ul *updateListener) send(backlog *core.Backlog) {
+func (ul *updateListener) send(backlog *dfsr.Backlog) {
 	ul.mutex.Lock()
 	defer ul.mutex.Unlock()
 	if ul.ch == nil {

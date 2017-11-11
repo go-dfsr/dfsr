@@ -6,7 +6,7 @@ import (
 	"github.com/Jeffail/tunny"
 	"github.com/go-ole/go-ole"
 	"gopkg.in/dfsr.v0/callstat"
-	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsr"
 	"gopkg.in/dfsr.v0/versionvector"
 )
 
@@ -17,7 +17,7 @@ type vectorWorkPool struct {
 type vectorJob struct {
 	ctx     context.Context
 	group   ole.GUID
-	tracker core.Tracker
+	tracker dfsr.Tracker
 }
 
 func newVectorWorkPool(numWorkers uint, r Reporter) (pool *vectorWorkPool, err error) {
@@ -35,7 +35,7 @@ func newVectorWorkPool(numWorkers uint, r Reporter) (pool *vectorWorkPool, err e
 	return &vectorWorkPool{p: p}, nil
 }
 
-func (vwp *vectorWorkPool) Vector(ctx context.Context, group ole.GUID, tracker core.Tracker) (vector *versionvector.Vector, call callstat.Call, err error) {
+func (vwp *vectorWorkPool) Vector(ctx context.Context, group ole.GUID, tracker dfsr.Tracker) (vector *versionvector.Vector, call callstat.Call, err error) {
 	v, err := vwp.p.SendWork(vectorJob{ctx: ctx, group: group, tracker: tracker})
 	if err != nil {
 		return

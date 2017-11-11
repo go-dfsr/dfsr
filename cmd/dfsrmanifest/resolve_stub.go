@@ -5,10 +5,10 @@ package main
 import (
 	"errors"
 
-	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsr"
 )
 
-func resolve(domain string) (dom string, data core.Domain, err error) {
+func resolve(domain string) (dom string, data dfsr.Domain, err error) {
 	dom = domain
 	err = errors.New("domain resolution not supported on non-windows platforms")
 	return

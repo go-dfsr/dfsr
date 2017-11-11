@@ -7,7 +7,7 @@ import (
 	"time"
 
 	adsi "gopkg.in/adsi.v0"
-	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsr"
 	"gopkg.in/dfsr.v0/dfsrconfig/membercache"
 	"gopkg.in/dfsr.v0/dname"
 )
@@ -34,7 +34,7 @@ func NewClient(client *adsi.Client, domain string) *Client {
 }
 
 // Domain will fetch DFSR configuration data from the domain.
-func (c *Client) Domain() (domain core.Domain, err error) {
+func (c *Client) Domain() (domain dfsr.Domain, err error) {
 	start := time.Now()
 
 	nc, err := c.NamingContext()
@@ -47,7 +47,7 @@ func (c *Client) Domain() (domain core.Domain, err error) {
 		return
 	}
 
-	return core.Domain{
+	return dfsr.Domain{
 		NamingContext:  nc,
 		Groups:         groups,
 		ConfigDuration: time.Now().Sub(start),
@@ -56,7 +56,7 @@ func (c *Client) Domain() (domain core.Domain, err error) {
 
 // NamingContext returns information about the default naming context for the
 // domain.
-func (c *Client) NamingContext() (nc core.NamingContext, err error) {
+func (c *Client) NamingContext() (nc dfsr.NamingContext, err error) {
 	domain, err := c.client.Open(dname.URL(c.domainDN))
 	if err != nil {
 		return
@@ -84,7 +84,7 @@ func (c *Client) NamingContext() (nc core.NamingContext, err error) {
 
 // Groups retreives the DFSR group configuration for all groups contained in the
 // domain.
-func (c *Client) Groups() (groups []core.Group, err error) {
+func (c *Client) Groups() (groups []dfsr.Group, err error) {
 	container, err := c.openContainer(dname.Make("cn", "DFSR-GlobalSettings", "System"))
 	if err != nil {
 		return nil, err
@@ -131,7 +131,7 @@ func (c *Client) Groups() (groups []core.Group, err error) {
 }
 
 /*
-func (gs *GlobalSettings) groups() (groups []core.Group, err error) {
+func (gs *GlobalSettings) groups() (groups []dfsr.Group, err error) {
 	container, err := gs.openContainer(makeDN("cn", "DFSR-GlobalSettings", "System"))
 	if err != nil {
 		return nil, err
@@ -160,7 +160,7 @@ func (gs *GlobalSettings) groups() (groups []core.Group, err error) {
 */
 
 // GroupByName retreives the DFSR group configuration for the given name.
-func (c *Client) GroupByName(groupName string) (group core.Group, err error) {
+func (c *Client) GroupByName(groupName string) (group dfsr.Group, err error) {
 	groupName = strings.ToLower(groupName)
 
 	container, err := c.openContainer(dname.Make("cn", "DFSR-GlobalSettings", "System"))
@@ -196,7 +196,7 @@ func (c *Client) GroupByName(groupName string) (group core.Group, err error) {
 
 // Group retreives the DFSR group configuration for the given distinguished
 // name.
-func (c *Client) Group(groupDN string) (group core.Group, err error) {
+func (c *Client) Group(groupDN string) (group dfsr.Group, err error) {
 	g, err := c.client.Open(dname.URL(groupDN))
 	if err != nil {
 		return
@@ -206,7 +206,7 @@ func (c *Client) Group(groupDN string) (group core.Group, err error) {
 	return c.group(g)
 }
 
-func (c *Client) group(g *adsi.Object) (group core.Group, err error) {
+func (c *Client) group(g *adsi.Object) (group dfsr.Group, err error) {
 	start := time.Now()
 
 	group.Name, err = g.Name()
@@ -253,7 +253,7 @@ func (c *Client) group(g *adsi.Object) (group core.Group, err error) {
 	return
 }
 
-func (c *Client) folders(content *adsi.Container) (folders []core.Folder, err error) {
+func (c *Client) folders(content *adsi.Container) (folders []dfsr.Folder, err error) {
 	iter, err := content.Children()
 	if err != nil {
 		return nil, err
@@ -274,7 +274,7 @@ func (c *Client) folders(content *adsi.Container) (folders []core.Folder, err er
 	return
 }
 
-func (c *Client) folder(f *adsi.Object) (folder core.Folder, err error) {
+func (c *Client) folder(f *adsi.Object) (folder dfsr.Folder, err error) {
 	folder.Name, err = f.Name()
 	if err != nil {
 		return
@@ -289,7 +289,7 @@ func (c *Client) folder(f *adsi.Object) (folder core.Folder, err error) {
 	return
 }
 
-func (c *Client) members(topology *adsi.Object) (members []core.Member, err error) {
+func (c *Client) members(topology *adsi.Object) (members []dfsr.Member, err error) {
 	tc, err := topology.ToContainer()
 	if err != nil {
 		return nil, err
@@ -318,7 +318,7 @@ func (c *Client) members(topology *adsi.Object) (members []core.Member, err erro
 
 // Member retreives the DFSR member configuration for the given distinguished
 // name. The member's connection list is included in the returned data.
-func (c *Client) Member(memberDN string) (member core.Member, err error) {
+func (c *Client) Member(memberDN string) (member dfsr.Member, err error) {
 	m, err := c.client.Open(dname.URL(memberDN))
 	if err != nil {
 		return
@@ -328,7 +328,7 @@ func (c *Client) Member(memberDN string) (member core.Member, err error) {
 	return c.member(m, memberDN)
 }
 
-func (c *Client) member(m *adsi.Object, dn string) (member core.Member, err error) {
+func (c *Client) member(m *adsi.Object, dn string) (member dfsr.Member, err error) {
 	member.MemberInfo, err = c.memberInfo(m, dn)
 	if err != nil {
 		return
@@ -354,7 +354,7 @@ func (c *Client) member(m *adsi.Object, dn string) (member core.Member, err erro
 // MemberInfo retreives the DFSR member configuration for the given
 // distinguished name. The member's connection list is not included in the
 // returned data.
-func (c *Client) MemberInfo(memberDN string) (member core.MemberInfo, err error) {
+func (c *Client) MemberInfo(memberDN string) (member dfsr.MemberInfo, err error) {
 	member, ok := c.mc.Retrieve(memberDN)
 	if ok {
 		return
@@ -369,7 +369,7 @@ func (c *Client) MemberInfo(memberDN string) (member core.MemberInfo, err error)
 	return c.memberInfo(m, memberDN)
 }
 
-func (c *Client) memberInfo(obj *adsi.Object, dn string) (member core.MemberInfo, err error) {
+func (c *Client) memberInfo(obj *adsi.Object, dn string) (member dfsr.MemberInfo, err error) {
 	if dn == "" {
 		path, perr := obj.Path()
 		if err != nil {
@@ -427,7 +427,7 @@ func (c *Client) memberInfo(obj *adsi.Object, dn string) (member core.MemberInfo
 	return
 }
 
-func (c *Client) connections(member *adsi.Object) (connections []core.Connection, err error) {
+func (c *Client) connections(member *adsi.Object) (connections []dfsr.Connection, err error) {
 	mc, err := member.ToContainer()
 	if err != nil {
 		return nil, err
@@ -454,7 +454,7 @@ func (c *Client) connections(member *adsi.Object) (connections []core.Connection
 	return
 }
 
-func (c *Client) connection(obj *adsi.Object) (conn core.Connection, err error) {
+func (c *Client) connection(obj *adsi.Object) (conn dfsr.Connection, err error) {
 	class, err := obj.Class()
 	if err != nil {
 		return
@@ -498,7 +498,7 @@ func (c *Client) connection(obj *adsi.Object) (conn core.Connection, err error) 
 }
 
 // Computer retrieves the DNS host name for the given distinguished name.
-func (c *Client) Computer(dn string) (computer core.Computer, err error) {
+func (c *Client) Computer(dn string) (computer dfsr.Computer, err error) {
 	comp, err := c.client.Open(dname.URL(dn))
 	if err != nil {
 		return
@@ -508,7 +508,7 @@ func (c *Client) Computer(dn string) (computer core.Computer, err error) {
 	return c.computer(comp)
 }
 
-func (c *Client) computer(comp *adsi.Object) (computer core.Computer, err error) {
+func (c *Client) computer(comp *adsi.Object) (computer dfsr.Computer, err error) {
 	computer.DN, err = comp.Path()
 	if err != nil {
 		return

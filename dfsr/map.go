@@ -1,4 +1,4 @@
-package core
+package dfsr
 
 // MemberInfoMap maps member identifiers to member information.
 type MemberInfoMap map[string]MemberInfo

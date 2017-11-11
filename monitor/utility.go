@@ -3,10 +3,10 @@ package monitor
 import (
 	"context"
 
-	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsr"
 )
 
-func connections(domain *core.Domain) (output []*core.Backlog) {
+func connections(domain *dfsr.Domain) (output []*dfsr.Backlog) {
 	for gi := 0; gi < len(domain.Groups); gi++ {
 		group := &domain.Groups[gi]
 
@@ -27,7 +27,7 @@ func connections(domain *core.Domain) (output []*core.Backlog) {
 					continue
 				}
 
-				output = append(output, &core.Backlog{
+				output = append(output, &dfsr.Backlog{
 					Group: group,
 					From:  from,
 					To:    to,

@@ -1,8 +1,8 @@
 package dfsrconfig
 
-import "gopkg.in/dfsr.v0/core"
+import "gopkg.in/dfsr.v0/dfsr"
 
 type groupResult struct {
-	Group core.Group
+	Group dfsr.Group
 	Err   error
 }

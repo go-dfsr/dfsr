@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-ole/go-ole"
 	"gopkg.in/dfsr.v0/callstat"
-	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsr"
 	"gopkg.in/dfsr.v0/versionvector"
 )
 
@@ -29,11 +29,11 @@ func NewCacher(r Reporter, duration time.Duration) (cached Reporter) {
 }
 
 // FIXME: Make the underlying vector cache handle contexts from mulitple pending callers.
-func (c *cacher) Vector(ctx context.Context, group ole.GUID, tracker core.Tracker) (vector *versionvector.Vector, call callstat.Call, err error) {
+func (c *cacher) Vector(ctx context.Context, group ole.GUID, tracker dfsr.Tracker) (vector *versionvector.Vector, call callstat.Call, err error) {
 	return c.vc.Lookup(ctx, group, tracker)
 }
 
-func (c *cacher) Backlog(ctx context.Context, vector *versionvector.Vector, tracker core.Tracker) (backlog []int, call callstat.Call, err error) {
+func (c *cacher) Backlog(ctx context.Context, vector *versionvector.Vector, tracker dfsr.Tracker) (backlog []int, call callstat.Call, err error) {
 	return c.r.Backlog(ctx, vector, tracker)
 }
 

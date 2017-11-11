@@ -12,7 +12,7 @@ import (
 
 	"code.cloudfoundry.org/bytefmt"
 
-	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsr"
 	"gopkg.in/dfsr.v0/dfsrflag"
 	"gopkg.in/dfsr.v0/manifest"
 )
@@ -39,7 +39,7 @@ func main() {
 		memprofile   string
 		summarize    bool
 		resolv       bool
-		domainConfig core.Domain
+		domainConfig dfsr.Domain
 	)
 
 	fs.Var(&include, "i", "regular expression for file match (inclusion)")
@@ -140,7 +140,7 @@ func main() {
 	}
 }
 
-func run(path string, filter manifest.Filter, list, dump, summarize bool, domain *core.Domain, output Output) {
+func run(path string, filter manifest.Filter, list, dump, summarize bool, domain *dfsr.Domain, output Output) {
 	defer close(output)
 
 	mpath := manifest.Find(path)
@@ -196,7 +196,7 @@ func run(path string, filter manifest.Filter, list, dump, summarize bool, domain
 	}
 }
 
-func enumerate(m *manifest.Manifest, filter manifest.Filter, dump bool, domain *core.Domain, output Output) (total, filtered manifest.Stats, err error) {
+func enumerate(m *manifest.Manifest, filter manifest.Filter, dump bool, domain *dfsr.Domain, output Output) (total, filtered manifest.Stats, err error) {
 	members := domain.MemberInfoMap()
 
 	c, err := m.AdvancedCursor(members.Resolve, filter)

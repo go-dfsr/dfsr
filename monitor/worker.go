@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsr"
 	"gopkg.in/dfsr.v0/helper"
 	"gopkg.in/dfsr.v0/valuesink"
 )
@@ -74,7 +74,7 @@ func (w *worker) Poll(ctx context.Context) {
 	}
 }
 
-func (w *worker) compute(ctx context.Context, backlog *core.Backlog, updates []*Update, computed, sent *sync.WaitGroup) {
+func (w *worker) compute(ctx context.Context, backlog *dfsr.Backlog, updates []*Update, computed, sent *sync.WaitGroup) {
 	if cancelRequested(ctx) {
 		computed.Done()
 		sent.Done()
@@ -86,7 +86,7 @@ func (w *worker) compute(ctx context.Context, backlog *core.Backlog, updates []*
 	computed.Done()
 
 	if n := len(values); n == len(backlog.Group.Folders) {
-		backlog.Folders = make([]core.FolderBacklog, n)
+		backlog.Folders = make([]dfsr.FolderBacklog, n)
 		for v := 0; v < n; v++ {
 			backlog.Folders[v].Folder = &backlog.Group.Folders[v]
 			backlog.Folders[v].Backlog = values[v]

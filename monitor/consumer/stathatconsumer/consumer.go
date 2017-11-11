@@ -5,8 +5,7 @@ import (
 	"strings"
 
 	"github.com/stathat/go"
-
-	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsr"
 	"gopkg.in/dfsr.v0/monitor"
 )
 
@@ -51,7 +50,7 @@ func (c *Consumer) run() {
 	}
 }
 
-func (c *Consumer) send(backlog *core.Backlog) {
+func (c *Consumer) send(backlog *dfsr.Backlog) {
 	name := c.statName(backlog)
 	if name == "" {
 		return
@@ -59,7 +58,7 @@ func (c *Consumer) send(backlog *core.Backlog) {
 	stathat.PostEZValueTime(name, c.ezkey, float64(backlog.Sum()), backlog.Call.Start.Unix())
 }
 
-func (c *Consumer) statName(backlog *core.Backlog) string {
+func (c *Consumer) statName(backlog *dfsr.Backlog) string {
 	return fmt.Sprintf(c.format, backlog.Group.Name, backlog.From, backlog.To, nonFQDN(backlog.From), nonFQDN(backlog.To))
 }
 
@@ -71,7 +70,7 @@ func nonFQDN(fqdn string) string {
 	return strings.ToUpper(fqdn[0:dot])
 }
 
-func reportable(backlog *core.Backlog) bool {
+func reportable(backlog *dfsr.Backlog) bool {
 	if backlog.Err != nil {
 		return false
 	}

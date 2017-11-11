@@ -4,11 +4,11 @@ package main
 
 import (
 	adsi "gopkg.in/adsi.v0"
-	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsr"
 	"gopkg.in/dfsr.v0/dfsrconfig"
 )
 
-func resolve(domain string) (dom string, data core.Domain, err error) {
+func resolve(domain string) (dom string, data dfsr.Domain, err error) {
 	client, err := adsi.NewClient()
 	if err != nil {
 		return
