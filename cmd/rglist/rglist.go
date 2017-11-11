@@ -6,7 +6,7 @@ import (
 	"log"
 
 	"gopkg.in/adsi.v0"
-	"gopkg.in/dfsr.v0/config"
+	"gopkg.in/dfsr.v0/dfsrconfig"
 )
 
 func main() {
@@ -27,7 +27,7 @@ func main() {
 		domain = dnc
 	}
 
-	d, err := config.Domain(client, domain)
+	d, err := dfsrconfig.Domain(client, domain)
 	if err != nil {
 		log.Fatal(err)
 	}

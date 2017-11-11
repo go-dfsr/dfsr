@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"time"
 
-	"gopkg.in/dfsr.v0/config"
+	"gopkg.in/dfsr.v0/dfsrconfig"
 	"gopkg.in/dfsr.v0/monitor"
 	"gopkg.in/dfsr.v0/monitor/consumer/stathatconsumer"
 
@@ -47,7 +47,7 @@ func (m *dfsrmonitor) Execute(args []string, r <-chan svc.ChangeRequest, changes
 
 	// Step 2: Create and start configuration monitor
 	elog.Info(EventInitProgress, "Creating configuration monitor.")
-	cfg := config.NewDomainMonitor(settings.Domain, settings.ConfigPollingInterval, settings.ConfigPollingTimeout)
+	cfg := dfsrconfig.NewDomainMonitor(settings.Domain, settings.ConfigPollingInterval, settings.ConfigPollingTimeout)
 	if err := cfg.Start(); err != nil {
 		elog.Error(EventInitFailure, fmt.Sprintf("Configuration initialization failure: %v", err))
 		return true, ErrConfigInitFailure

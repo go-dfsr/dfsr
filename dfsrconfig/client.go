@@ -1,4 +1,4 @@
-package globalsettings
+package dfsrconfig
 
 import (
 	"errors"
@@ -6,43 +6,43 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/adsi.v0"
-	"gopkg.in/dfsr.v0/config/membercache"
+	adsi "gopkg.in/adsi.v0"
 	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsrconfig/membercache"
+	"gopkg.in/dfsr.v0/dname"
 )
 
-// GlobalSettings provides a means of querying DFSR global settings.
-type GlobalSettings struct {
+// Client is capable of perfroming LDAP queries to retrieve DFSR configuration.
+type Client struct {
 	client   *adsi.Client
 	domainDN string
 	mc       *membercache.Cache // Maps distinguished names to MemberInfo
 }
 
-// New returns a new DFSR global settings configuration manager for the given
-// domain.
+// NewClient returns a new DFSR configuration client for the given domain.
 //
 // The provided ADSI client is retained by the global settings and will be used
 // internally to peform the necessary LDAP queries. It is the caller's
 // responsibility to explicitly close the ADSI client at an appropriate time
 // when finished with the global settings.
-func New(client *adsi.Client, domain string) *GlobalSettings {
-	return &GlobalSettings{
+func NewClient(client *adsi.Client, domain string) *Client {
+	return &Client{
 		client:   client,
-		domainDN: domainDN(domain),
+		domainDN: dname.Domain(domain),
 		mc:       membercache.New(),
 	}
 }
 
 // Domain will fetch DFSR configuration data from the domain.
-func (gs *GlobalSettings) Domain() (domain core.Domain, err error) {
+func (c *Client) Domain() (domain core.Domain, err error) {
 	start := time.Now()
 
-	nc, err := gs.NamingContext()
+	nc, err := c.NamingContext()
 	if err != nil {
 		return
 	}
 
-	groups, err := gs.Groups()
+	groups, err := c.Groups()
 	if err != nil {
 		return
 	}
@@ -56,8 +56,8 @@ func (gs *GlobalSettings) Domain() (domain core.Domain, err error) {
 
 // NamingContext returns information about the default naming context for the
 // domain.
-func (gs *GlobalSettings) NamingContext() (nc core.NamingContext, err error) {
-	domain, err := gs.client.Open(ldap(gs.domainDN))
+func (c *Client) NamingContext() (nc core.NamingContext, err error) {
+	domain, err := c.client.Open(dname.URL(c.domainDN))
 	if err != nil {
 		return
 	}
@@ -84,8 +84,8 @@ func (gs *GlobalSettings) NamingContext() (nc core.NamingContext, err error) {
 
 // Groups retreives the DFSR group configuration for all groups contained in the
 // domain.
-func (gs *GlobalSettings) Groups() (groups []core.Group, err error) {
-	container, err := gs.openContainer(makeDN("cn", "DFSR-GlobalSettings", "System"))
+func (c *Client) Groups() (groups []core.Group, err error) {
+	container, err := c.openContainer(dname.Make("cn", "DFSR-GlobalSettings", "System"))
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +106,7 @@ func (gs *GlobalSettings) Groups() (groups []core.Group, err error) {
 		go func(ch chan groupResult, g *adsi.Object) {
 			defer g.Close()
 			defer close(ch)
-			group, werr := gs.group(g)
+			group, werr := c.group(g)
 			ch <- groupResult{Group: group, Err: werr}
 		}(ch, g)
 
@@ -160,10 +160,10 @@ func (gs *GlobalSettings) groups() (groups []core.Group, err error) {
 */
 
 // GroupByName retreives the DFSR group configuration for the given name.
-func (gs *GlobalSettings) GroupByName(groupName string) (group core.Group, err error) {
+func (c *Client) GroupByName(groupName string) (group core.Group, err error) {
 	groupName = strings.ToLower(groupName)
 
-	container, err := gs.openContainer(makeDN("cn", "DFSR-GlobalSettings", "System"))
+	container, err := c.openContainer(dname.Make("cn", "DFSR-GlobalSettings", "System"))
 	if err != nil {
 		return
 	}
@@ -186,27 +186,27 @@ func (gs *GlobalSettings) GroupByName(groupName string) (group core.Group, err e
 		candidate = strings.ToLower(candidate)
 
 		if candidate == groupName || strings.TrimPrefix(candidate, "cn=") == groupName {
-			return gs.group(g)
+			return c.group(g)
 		}
 	}
 
-	err = errors.New("Replication Group not found.")
+	err = errors.New("replication group not found")
 	return
 }
 
 // Group retreives the DFSR group configuration for the given distinguished
 // name.
-func (gs *GlobalSettings) Group(groupDN string) (group core.Group, err error) {
-	g, err := gs.client.Open(ldap(groupDN))
+func (c *Client) Group(groupDN string) (group core.Group, err error) {
+	g, err := c.client.Open(dname.URL(groupDN))
 	if err != nil {
 		return
 	}
 	defer g.Close()
 
-	return gs.group(g)
+	return c.group(g)
 }
 
-func (gs *GlobalSettings) group(g *adsi.Object) (group core.Group, err error) {
+func (c *Client) group(g *adsi.Object) (group core.Group, err error) {
 	start := time.Now()
 
 	group.Name, err = g.Name()
@@ -232,7 +232,7 @@ func (gs *GlobalSettings) group(g *adsi.Object) (group core.Group, err error) {
 	}
 	defer content.Close()
 
-	group.Folders, err = gs.folders(content)
+	group.Folders, err = c.folders(content)
 	if err != nil {
 		return
 	}
@@ -243,7 +243,7 @@ func (gs *GlobalSettings) group(g *adsi.Object) (group core.Group, err error) {
 	}
 	defer topology.Close()
 
-	group.Members, err = gs.members(topology)
+	group.Members, err = c.members(topology)
 	if err != nil {
 		return
 	}
@@ -253,7 +253,7 @@ func (gs *GlobalSettings) group(g *adsi.Object) (group core.Group, err error) {
 	return
 }
 
-func (gs *GlobalSettings) folders(content *adsi.Container) (folders []core.Folder, err error) {
+func (c *Client) folders(content *adsi.Container) (folders []core.Folder, err error) {
 	iter, err := content.Children()
 	if err != nil {
 		return nil, err
@@ -263,7 +263,7 @@ func (gs *GlobalSettings) folders(content *adsi.Container) (folders []core.Folde
 	for f, err := iter.Next(); err == nil; f, err = iter.Next() {
 		defer f.Close()
 
-		folder, err := gs.folder(f)
+		folder, err := c.folder(f)
 		if err != nil {
 			return nil, err
 		}
@@ -274,7 +274,7 @@ func (gs *GlobalSettings) folders(content *adsi.Container) (folders []core.Folde
 	return
 }
 
-func (gs *GlobalSettings) folder(f *adsi.Object) (folder core.Folder, err error) {
+func (c *Client) folder(f *adsi.Object) (folder core.Folder, err error) {
 	folder.Name, err = f.Name()
 	if err != nil {
 		return
@@ -289,7 +289,7 @@ func (gs *GlobalSettings) folder(f *adsi.Object) (folder core.Folder, err error)
 	return
 }
 
-func (gs *GlobalSettings) members(topology *adsi.Object) (members []core.Member, err error) {
+func (c *Client) members(topology *adsi.Object) (members []core.Member, err error) {
 	tc, err := topology.ToContainer()
 	if err != nil {
 		return nil, err
@@ -305,7 +305,7 @@ func (gs *GlobalSettings) members(topology *adsi.Object) (members []core.Member,
 	for m, err := iter.Next(); err == nil; m, err = iter.Next() {
 		defer m.Close()
 
-		member, err := gs.member(m, "")
+		member, err := c.member(m, "")
 		if err != nil {
 			return nil, err
 		}
@@ -318,18 +318,18 @@ func (gs *GlobalSettings) members(topology *adsi.Object) (members []core.Member,
 
 // Member retreives the DFSR member configuration for the given distinguished
 // name. The member's connection list is included in the returned data.
-func (gs *GlobalSettings) Member(memberDN string) (member core.Member, err error) {
-	m, err := gs.client.Open(ldap(memberDN))
+func (c *Client) Member(memberDN string) (member core.Member, err error) {
+	m, err := c.client.Open(dname.URL(memberDN))
 	if err != nil {
 		return
 	}
 	defer m.Close()
 
-	return gs.member(m, memberDN)
+	return c.member(m, memberDN)
 }
 
-func (gs *GlobalSettings) member(m *adsi.Object, dn string) (member core.Member, err error) {
-	member.MemberInfo, err = gs.memberInfo(m, dn)
+func (c *Client) member(m *adsi.Object, dn string) (member core.Member, err error) {
+	member.MemberInfo, err = c.memberInfo(m, dn)
 	if err != nil {
 		return
 	}
@@ -337,41 +337,41 @@ func (gs *GlobalSettings) member(m *adsi.Object, dn string) (member core.Member,
 	serverref, _ := m.AttrString("serverReference")
 	if serverref == "" {
 		// Standard DFSR membership
-		member.Connections, err = gs.connections(m)
+		member.Connections, err = c.connections(m)
 		return
 	}
 
 	// Domain System Volume membership
-	server, err := gs.client.Open(ldap(serverref))
+	server, err := c.client.Open(dname.URL(serverref))
 	if err != nil {
 		return
 	}
 
-	member.Connections, err = gs.connections(server)
+	member.Connections, err = c.connections(server)
 	return
 }
 
 // MemberInfo retreives the DFSR member configuration for the given
 // distinguished name. The member's connection list is not included in the
 // returned data.
-func (gs *GlobalSettings) MemberInfo(memberDN string) (member core.MemberInfo, err error) {
-	member, ok := gs.mc.Retrieve(memberDN)
+func (c *Client) MemberInfo(memberDN string) (member core.MemberInfo, err error) {
+	member, ok := c.mc.Retrieve(memberDN)
 	if ok {
 		return
 	}
 
-	m, err := gs.client.Open(ldap(memberDN))
+	m, err := c.client.Open(dname.URL(memberDN))
 	if err != nil {
 		return
 	}
 	defer m.Close()
 
-	return gs.memberInfo(m, memberDN)
+	return c.memberInfo(m, memberDN)
 }
 
-func (gs *GlobalSettings) memberInfo(m *adsi.Object, dn string) (member core.MemberInfo, err error) {
+func (c *Client) memberInfo(obj *adsi.Object, dn string) (member core.MemberInfo, err error) {
 	if dn == "" {
-		path, perr := m.Path()
+		path, perr := obj.Path()
 		if err != nil {
 			err = perr
 			return
@@ -381,7 +381,7 @@ func (gs *GlobalSettings) memberInfo(m *adsi.Object, dn string) (member core.Mem
 		member.DN = dn
 	}
 
-	class, err := m.Class()
+	class, err := obj.Class()
 	if err != nil {
 		return
 	}
@@ -389,42 +389,45 @@ func (gs *GlobalSettings) memberInfo(m *adsi.Object, dn string) (member core.Mem
 	var compref string
 	switch class {
 	case "nTDSDSA":
-		m, err = gs.openParent(m)
-		defer m.Close()
+		obj, err = c.openParent(obj)
+		if err != nil {
+			return
+		}
+		defer obj.Close()
 		fallthrough
 	case "server":
-		compref, err = m.AttrString("serverReference")
+		compref, err = obj.AttrString("serverReference")
 		if err != nil {
 			return
 		}
 	case "msDFSR-Member":
-		compref, err = m.AttrString("msDFSR-ComputerReference")
+		compref, err = obj.AttrString("msDFSR-ComputerReference")
 		if err != nil {
 			return
 		}
 	default:
-		err = errors.New("Unknown Active Directory membership class")
+		err = errors.New("unknown active directory membership class")
 		return
 	}
 
-	member.Name, err = m.Name()
+	member.Name, err = obj.Name()
 	if err != nil {
 		return
 	}
 	member.Name = strings.TrimPrefix(member.Name, "CN=")
 
-	member.ID, err = m.GUID()
+	member.ID, err = obj.GUID()
 	if err != nil {
 		return
 	}
 
-	member.Computer, err = gs.Computer(compref)
+	member.Computer, err = c.Computer(compref)
 
-	gs.mc.Set(member) // Add member info to the cache
+	c.mc.Set(member) // Add member info to the cache
 	return
 }
 
-func (gs *GlobalSettings) connections(member *adsi.Object) (connections []core.Connection, err error) {
+func (c *Client) connections(member *adsi.Object) (connections []core.Connection, err error) {
 	mc, err := member.ToContainer()
 	if err != nil {
 		return nil, err
@@ -437,10 +440,10 @@ func (gs *GlobalSettings) connections(member *adsi.Object) (connections []core.C
 	}
 	defer iter.Close()
 
-	for c, err := iter.Next(); err == nil; c, err = iter.Next() {
-		defer c.Close()
+	for child, err := iter.Next(); err == nil; child, err = iter.Next() {
+		defer child.Close()
 
-		conn, err := gs.connection(c)
+		conn, err := c.connection(child)
 		if err != nil {
 			return nil, err
 		}
@@ -451,31 +454,31 @@ func (gs *GlobalSettings) connections(member *adsi.Object) (connections []core.C
 	return
 }
 
-func (gs *GlobalSettings) connection(c *adsi.Object) (conn core.Connection, err error) {
-	class, err := c.Class()
+func (c *Client) connection(obj *adsi.Object) (conn core.Connection, err error) {
+	class, err := obj.Class()
 	if err != nil {
 		return
 	}
 
-	conn.Name, err = c.Name()
+	conn.Name, err = obj.Name()
 	if err != nil {
 		return
 	}
 	conn.Name = strings.TrimPrefix(conn.Name, "CN=")
 
-	conn.ID, err = c.GUID()
+	conn.ID, err = obj.GUID()
 	if err != nil {
 		return
 	}
 
-	conn.MemberDN, err = c.AttrString("fromServer")
+	conn.MemberDN, err = obj.AttrString("fromServer")
 	if err != nil {
 		return
 	}
 
 	if class == "msDFSR-Connection" {
 		// Standard DFSR connection
-		conn.Enabled, err = c.AttrBool("msDFSR-Enabled")
+		conn.Enabled, err = obj.AttrBool("msDFSR-Enabled")
 		if err != nil {
 			return
 		}
@@ -484,7 +487,7 @@ func (gs *GlobalSettings) connection(c *adsi.Object) (conn core.Connection, err 
 		conn.Enabled = true // These members are always enabled
 	}
 
-	mi, err := gs.MemberInfo(conn.MemberDN)
+	mi, err := c.MemberInfo(conn.MemberDN)
 	if err != nil {
 		return
 	}
@@ -495,24 +498,24 @@ func (gs *GlobalSettings) connection(c *adsi.Object) (conn core.Connection, err 
 }
 
 // Computer retrieves the DNS host name for the given distinguished name.
-func (gs *GlobalSettings) Computer(dn string) (computer core.Computer, err error) {
-	c, err := gs.client.Open(ldap(dn))
+func (c *Client) Computer(dn string) (computer core.Computer, err error) {
+	comp, err := c.client.Open(dname.URL(dn))
 	if err != nil {
 		return
 	}
-	defer c.Close()
+	defer comp.Close()
 
-	return gs.computer(c)
+	return c.computer(comp)
 }
 
-func (gs *GlobalSettings) computer(c *adsi.Object) (computer core.Computer, err error) {
-	computer.DN, err = c.Path()
+func (c *Client) computer(comp *adsi.Object) (computer core.Computer, err error) {
+	computer.DN, err = comp.Path()
 	if err != nil {
 		return
 	}
 	computer.DN = strings.TrimPrefix(computer.DN, "LDAP://")
 
-	computer.Host, err = c.AttrString("dNSHostName")
+	computer.Host, err = comp.AttrString("dNSHostName")
 	if err != nil {
 		return
 	}
@@ -520,16 +523,16 @@ func (gs *GlobalSettings) computer(c *adsi.Object) (computer core.Computer, err 
 	return
 }
 
-func (gs *GlobalSettings) openParent(o *adsi.Object) (parent *adsi.Object, err error) {
+func (c *Client) openParent(o *adsi.Object) (parent *adsi.Object, err error) {
 	path, err := o.Parent()
 	if err != nil {
 		return
 	}
 
-	return gs.client.Open(path)
+	return c.client.Open(path)
 }
 
-func (gs *GlobalSettings) openContainer(partialDN string) (*adsi.Container, error) {
-	path := ldap(combineDN(partialDN, gs.domainDN))
-	return gs.client.OpenContainer(path)
+func (c *Client) openContainer(partialDN string) (*adsi.Container, error) {
+	path := dname.URL(dname.Combine(partialDN, c.domainDN))
+	return c.client.OpenContainer(path)
 }

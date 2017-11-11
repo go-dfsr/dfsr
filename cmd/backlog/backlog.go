@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"gopkg.in/adsi.v0"
-	"gopkg.in/dfsr.v0/config"
 	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsrconfig"
 	"gopkg.in/dfsr.v0/dfsrflag"
 	"gopkg.in/dfsr.v0/helper"
 )
@@ -173,7 +173,7 @@ func setup(domain string, groupRegex, fromRegex, toRegex, memberRegex, skipRegex
 	}
 	dom = domain
 
-	d, err := config.Domain(client, domain)
+	d, err := dfsrconfig.Domain(client, domain)
 	if err != nil {
 		return domain, nil, err
 	}

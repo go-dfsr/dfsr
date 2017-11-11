@@ -4,8 +4,8 @@ package main
 
 import (
 	adsi "gopkg.in/adsi.v0"
-	"gopkg.in/dfsr.v0/config"
 	"gopkg.in/dfsr.v0/core"
+	"gopkg.in/dfsr.v0/dfsrconfig"
 )
 
 func resolve(domain string) (dom string, data core.Domain, err error) {
@@ -23,7 +23,7 @@ func resolve(domain string) (dom string, data core.Domain, err error) {
 	}
 	dom = domain
 
-	data, err = config.Domain(client, domain)
+	data, err = dfsrconfig.Domain(client, domain)
 
 	return
 }
