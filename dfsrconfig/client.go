@@ -2,7 +2,6 @@ package dfsrconfig
 
 import (
 	"strings"
-	"time"
 
 	adsi "gopkg.in/adsi.v0"
 	"gopkg.in/dfsr.v0/dfsr"
@@ -29,27 +28,6 @@ func NewClient(client *adsi.Client, domain string) *Client {
 		domainDN: dname.Domain(domain),
 		mc:       membercache.New(),
 	}
-}
-
-// Domain will fetch DFSR configuration data from the domain.
-func (c *Client) Domain() (domain dfsr.Domain, err error) {
-	start := time.Now()
-
-	nc, err := c.NamingContext()
-	if err != nil {
-		return
-	}
-
-	groups, err := c.Groups()
-	if err != nil {
-		return
-	}
-
-	return dfsr.Domain{
-		NamingContext:  nc,
-		Groups:         groups,
-		ConfigDuration: time.Now().Sub(start),
-	}, nil
 }
 
 // NamingContext returns information about the default naming context for the
