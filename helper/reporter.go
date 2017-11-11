@@ -247,7 +247,7 @@ func (r *reporter) backlog(vector *versionvector.Vector, tracker dfsr.Tracker) <
 func (r *reporter) Report(ctx context.Context, group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
 	if backlog && vector == nil {
 		call.Description = "Reporter.Report"
-		err = errors.New("Backlog reports require that a reference member vector is provided.")
+		err = errors.New("backlog reports require that a reference member vector is provided")
 		call.Complete(err)
 		return
 	}

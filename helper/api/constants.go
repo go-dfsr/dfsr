@@ -8,6 +8,6 @@ const (
 )
 
 var (
-	ErrInvalidNamespace = errors.New("The provided name or namespace is invalid.")
-	ErrAccessDenied     = errors.New("Access denied.")
+	ErrInvalidNamespace = errors.New("the provided name or namespace is invalid")
+	ErrAccessDenied     = errors.New("access denied")
 )

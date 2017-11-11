@@ -38,7 +38,7 @@ type Lookup func(ctx context.Context, key Key, tracker dfsr.Tracker) (value Valu
 var (
 	// ErrClosed is returned from calls to the cache or in the event that the
 	// Close() function has already been called.
-	ErrClosed = errors.New("The cache is closing or already closed.")
+	ErrClosed = errors.New("the cache is closing or already closed")
 )
 
 // Cache is a threadsafe expiring cache that is capable of passing cache misses

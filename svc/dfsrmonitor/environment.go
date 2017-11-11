@@ -102,23 +102,23 @@ func (e *Environment) Analyze() {
 // service installation.
 func (e *Environment) Validate() error {
 	if strings.Contains(e.InstallPath, "\"") {
-		return errors.New("Installation path contains quotation marks.")
+		return errors.New("installation path contains quotation marks")
 	}
 
 	if e.ServiceName == "" {
-		return errors.New("Unable to determine service name.")
+		return errors.New("unable to determine service name")
 	}
 
 	if e.ExePath == "" {
-		return errors.New("Unable to determine executable path.")
+		return errors.New("unable to determine executable path")
 	}
 
 	if e.InstallPath == "" {
-		return errors.New("Unable to determine installation path.")
+		return errors.New("unable to determine installation path")
 	}
 
 	if e.InstallDir == "" {
-		return errors.New("Unable to determine installation directory.")
+		return errors.New("unable to determine installation directory")
 	}
 
 	return nil

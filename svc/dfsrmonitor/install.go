@@ -24,28 +24,28 @@ func installService(env *Environment) error {
 	s, err := m.OpenService(env.ServiceName)
 	if err == nil {
 		s.Close()
-		return fmt.Errorf("Service %s already exists.", env.ServiceName)
+		return fmt.Errorf("service \"%s\" already exists", env.ServiceName)
 	}
 
 	// Ensure the environment is valid
 	if err = env.Validate(); err != nil {
-		return fmt.Errorf("Invalid configuration: %v", err)
+		return fmt.Errorf("invalid configuration: %v", err)
 	}
 
 	// Create the installation directory
 	if err = os.MkdirAll(env.InstallDir, os.ModePerm); err != nil {
-		return fmt.Errorf("Unable to create installation directory \"%s\": %v", env.InstallDir, err)
+		return fmt.Errorf("unable to create installation directory \"%s\": %v", env.InstallDir, err)
 	}
 
 	// Copy the service executable to its installation path
 	if err = cp(env.ExePath, env.InstallPath); err != nil {
-		return fmt.Errorf("Unable to copy \"%s\" to \"%s\": %v", env.ExePath, env.InstallPath, err)
+		return fmt.Errorf("unable to copy \"%s\" to \"%s\": %v", env.ExePath, env.InstallPath, err)
 	}
 
 	// Ensure the service account has read and execute rights on the new path
 	if env.Account != "" {
 		if err = grant(env.InstallDir, env.Account); err != nil {
-			return fmt.Errorf("Unable to grant read and execute rights to \"%s\" for \"%s\": %v", env.Account, env.InstallDir, err)
+			return fmt.Errorf("unable to grant read and execute rights to \"%s\" for \"%s\": %v", env.Account, env.InstallDir, err)
 		}
 	}
 
@@ -68,7 +68,7 @@ func installService(env *Environment) error {
 	// Create the service
 	s, err = m.CreateService(env.ServiceName, env.InstallPath, conf, env.Settings.Args()...)
 	if err != nil {
-		return fmt.Errorf("Unable to create service %s using \"%s\": %v", env.ServiceName, env.InstallPath, err)
+		return fmt.Errorf("unable to create service %s using \"%s\": %v", env.ServiceName, env.InstallPath, err)
 	}
 	defer s.Close()
 
@@ -76,7 +76,7 @@ func installService(env *Environment) error {
 	err = eventlog.InstallAsEventCreate(env.ServiceName, eventlog.Error|eventlog.Warning|eventlog.Info)
 	if err != nil {
 		s.Delete()
-		return fmt.Errorf("SetupEventLogSource() failed: %s", err)
+		return fmt.Errorf("creation of event log source failed: %s", err)
 	}
 	return nil
 }
@@ -90,7 +90,7 @@ func removeService(env *Environment) error {
 
 	s, err := m.OpenService(env.ServiceName)
 	if err != nil {
-		return fmt.Errorf("Service %s is not installed.", env.ServiceName)
+		return fmt.Errorf("service %s is not installed", env.ServiceName)
 	}
 	defer s.Close()
 	err = s.Delete()
@@ -100,7 +100,7 @@ func removeService(env *Environment) error {
 
 	err = eventlog.Remove(env.ServiceName)
 	if err != nil {
-		return fmt.Errorf("RemoveEventLogSource() failed: %s", err)
+		return fmt.Errorf("removal of event log source failed: %s", err)
 	}
 	return nil
 }
