@@ -54,20 +54,17 @@ func (c *Client) member(m *adsi.Object, dn string) (member dfsr.Member, err erro
 		return
 	}
 
-	serverref, _ := m.AttrString("serverReference")
-	if serverref == "" {
-		// Standard DFSR membership
-		member.Connections, err = c.connections(m)
-		return
+	connContainer := m
+
+	if serverref, _ := m.AttrString("serverReference"); serverref != "" {
+		// Domain System Volume membership has an extra level of indirection
+		connContainer, err = c.client.Open(dname.URL(serverref))
+		if err != nil {
+			return
+		}
 	}
 
-	// Domain System Volume membership
-	server, err := c.client.Open(dname.URL(serverref))
-	if err != nil {
-		return
-	}
-
-	member.Connections, err = c.connections(server)
+	member.Connections, err = c.connections(connContainer)
 	return
 }
 
