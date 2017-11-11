@@ -69,6 +69,8 @@ type Group struct {
 }
 
 // Folder represents a replication folder.
+//
+// TODO: Consider renaming this to ContentSet.
 type Folder struct {
 	Name string
 	ID   *ole.GUID
@@ -84,14 +86,50 @@ type Member struct {
 type MemberInfo struct {
 	Name     string
 	ID       *ole.GUID
-	Computer Computer
 	DN       string // Distinguished name of the member
+	Computer Computer
+	Settings LocalSettings
 }
 
 // Computer represents information about a computer.
 type Computer struct {
 	DN   string // Distinguished name
 	Host string
+}
+
+// LocalSettings contains the local settings for a replication member. It
+// includes configuration particular to that member, such as such as content
+// set paths, staging directories, etc.
+type LocalSettings struct {
+	Version     string // DFSR version
+	Subscribers []Subscriber
+}
+
+// Subscriber contains the set of content set subscriptions for replication
+// group member.
+type Subscriber struct {
+	MemberReference  string
+	ReplicationGroup *ole.GUID
+	Subscriptions    []Subscription
+}
+
+// Subscription represents the content set settings for a replication group
+// member.
+type Subscription struct {
+	ReplicationGroup *ole.GUID
+	ContentSet       *ole.GUID
+	RootPath         string
+	RootSize         int // In Mibibytes (TODO: Convert to bytes?)
+	StagingPath      string
+	StagingSize      int // In Mibibytes (TODO: Convert to bytes?)
+	ConflictPath     string
+	ConflictSize     int // In Mibibytes (TODO: Convert to bytes?)
+	Enabled          bool
+	ReadOnly         bool
+	Options          int // Enum flags
+	CachePolicy      int // Enum flags
+	MaxAgeInCache    time.Duration
+	MinDurationCache time.Duration
 }
 
 // Connection represents a one-way connection between replication members.

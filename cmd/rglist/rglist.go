@@ -42,7 +42,7 @@ func main() {
 		}
 		for m := 0; m < len(group.Members); m++ {
 			member := &group.Members[m]
-			fmt.Printf("          Member: %-47s ID: %v Computer: %s\n", member.Name, member.ID, member.Computer.Host)
+			fmt.Printf("          Member: %-47s ID: %v Computer: %s Version: %s\n", member.Name, member.ID, member.Computer.Host, member.Settings.Version)
 			for c := 0; c < len(member.Connections); c++ {
 				conn := &member.Connections[c]
 				enabledMark := " "

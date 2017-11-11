@@ -139,6 +139,11 @@ func (c *Client) memberInfo(obj *adsi.Object, dn string) (member dfsr.MemberInfo
 	}
 
 	member.Computer, err = c.Computer(compref)
+	if err != nil {
+		return
+	}
+
+	member.Settings, err = c.LocalSettings(dname.Combine("cn=DFSR-LocalSettings", compref))
 
 	c.mc.Set(member) // Add member info to the cache
 	return
