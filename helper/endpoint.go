@@ -7,6 +7,7 @@ import (
 
 	"github.com/gentlemanautomaton/calltracker"
 	ole "github.com/go-ole/go-ole"
+	"github.com/google/uuid"
 	"gopkg.in/dfsr.v0/callstat"
 	"gopkg.in/dfsr.v0/versionvector"
 )
@@ -191,7 +192,7 @@ func (e *Endpoint) Close() {
 
 // Vector returns the reference version vectors for the requested replication
 // group.
-func (e *Endpoint) Vector(ctx context.Context, group ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error) {
+func (e *Endpoint) Vector(ctx context.Context, group uuid.UUID) (vector *versionvector.Vector, call callstat.Call, err error) {
 	call.Begin("Endpoint.Vector")
 	defer call.Complete(err)
 
@@ -246,7 +247,7 @@ func (e *Endpoint) Backlog(ctx context.Context, vector *versionvector.Vector) (b
 }
 
 // Report generates a report when compared against the reference version vector.
-func (e *Endpoint) Report(ctx context.Context, group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
+func (e *Endpoint) Report(ctx context.Context, group uuid.UUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
 	call.Begin("Endpoint.Report")
 	defer call.Complete(err)
 

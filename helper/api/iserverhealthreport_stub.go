@@ -2,13 +2,16 @@
 
 package api
 
-import "github.com/go-ole/go-ole"
+import (
+	"github.com/go-ole/go-ole"
+	"github.com/google/uuid"
+)
 
 // NewIServerHealthReport returns a new instance of the IServerHealthReport
 // component object model interface.
 //
 // In a typical use case, the provided clsid should CLSID_DFSRHelper.
-func NewIServerHealthReport(server string, clsid *ole.GUID) (*IServerHealthReport, error) {
+func NewIServerHealthReport(server string, clsid uuid.UUID) (*IServerHealthReport, error) {
 	return nil, ole.NewError(ole.E_NOTIMPL)
 }
 
@@ -17,7 +20,7 @@ func NewIServerHealthReport(server string, clsid *ole.GUID) (*IServerHealthRepor
 // are returned.
 //
 // [MS-DFSRH]: 3.1.5.4.5
-func (v *IServerHealthReport) GetReferenceVersionVectors(group ole.GUID) (vectors *ole.SafeArrayConversion, err error) {
+func (v *IServerHealthReport) GetReferenceVersionVectors(group uuid.UUID) (vectors *ole.SafeArrayConversion, err error) {
 	return nil, ole.NewError(ole.E_NOTIMPL)
 }
 

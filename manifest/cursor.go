@@ -3,7 +3,6 @@ package manifest
 import (
 	"errors"
 	"io"
-	"strings"
 	"sync"
 )
 
@@ -62,7 +61,7 @@ func (c *Cursor) Read() (resource Resource, err error) {
 		if err != nil {
 			return
 		}
-		if partner, ok := c.resolver.Resolve(strings.ToLower(resource.PartnerGUID)); ok {
+		if partner, ok := c.resolver.Resolve(resource.PartnerGUID.String()); ok {
 			resource.PartnerHost = partner.Computer.Host
 			resource.PartnerDN = partner.Computer.DN
 		}
@@ -98,7 +97,7 @@ func (c *Cursor) End() error {
 		if err != nil {
 			return err
 		}
-		if partner, ok := c.resolver.Resolve(strings.ToLower(resource.PartnerGUID)); ok {
+		if partner, ok := c.resolver.Resolve(resource.PartnerGUID.String()); ok {
 			resource.PartnerHost = partner.Computer.Host
 			resource.PartnerDN = partner.Computer.DN
 		}

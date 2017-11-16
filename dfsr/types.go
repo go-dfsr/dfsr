@@ -7,7 +7,7 @@ import (
 	"gopkg.in/dfsr.v0/callstat"
 
 	"github.com/gentlemanautomaton/calltracker"
-	"github.com/go-ole/go-ole"
+	"github.com/google/uuid"
 )
 
 // Tracker represents a call state tracker.
@@ -19,7 +19,7 @@ type Tracker interface {
 
 // NamingContext represents an active directory naming context.
 type NamingContext struct {
-	ID          *ole.GUID
+	ID          uuid.UUID
 	DN          string // Distinguished name
 	Description string
 	Path        string
@@ -53,7 +53,7 @@ func (d *Domain) MemberInfoMap() MemberInfoMap {
 // Site represents an Active Directory site.
 type Site struct {
 	Name           string
-	ID             *ole.GUID
+	ID             uuid.UUID
 	Members        []Member
 	ConfigDuration time.Duration // Time elapsed while retrieving configuration
 }
@@ -62,7 +62,7 @@ type Site struct {
 // Group represents a replication group.
 type Group struct {
 	Name           string
-	ID             *ole.GUID
+	ID             uuid.UUID
 	Folders        []Folder
 	Members        []Member
 	ConfigDuration time.Duration // Time elapsed while retrieving configuration
@@ -73,7 +73,7 @@ type Group struct {
 // TODO: Consider renaming this to ContentSet.
 type Folder struct {
 	Name string
-	ID   *ole.GUID
+	ID   uuid.UUID
 }
 
 // Member represents a replication member.
@@ -85,7 +85,7 @@ type Member struct {
 // MemberInfo represents identifying information about a replication member.
 type MemberInfo struct {
 	Name     string
-	ID       *ole.GUID
+	ID       uuid.UUID
 	DN       string // Distinguished name of the member
 	Computer Computer
 	Settings LocalSettings
@@ -101,23 +101,23 @@ type Computer struct {
 // includes configuration particular to that member, such as such as content
 // set paths, staging directories, etc.
 type LocalSettings struct {
-	Version     string // DFSR version
-	Subscribers []Subscriber
+	Version string // DFSR version
+	Groups  []Subscriber
 }
 
 // Subscriber contains the set of content set subscriptions for a replication
 // group member.
 type Subscriber struct {
 	MemberReference  string
-	ReplicationGroup *ole.GUID
-	Subscriptions    []Subscription
+	ReplicationGroup uuid.UUID
+	ContentSets      []Subscription
 }
 
 // Subscription represents the content set settings for a replication group
 // member.
 type Subscription struct {
-	ReplicationGroup *ole.GUID
-	ContentSet       *ole.GUID
+	ReplicationGroup uuid.UUID
+	ContentSet       uuid.UUID
 	RootPath         string
 	RootSize         int // In Mibibytes (TODO: Convert to bytes?)
 	StagingPath      string
@@ -135,7 +135,7 @@ type Subscription struct {
 // Connection represents a one-way connection between replication members.
 type Connection struct {
 	Name     string
-	ID       *ole.GUID
+	ID       uuid.UUID
 	MemberDN string
 	Enabled  bool
 	Computer Computer // Distinguished name of source member in topology, matches DN field of that Member

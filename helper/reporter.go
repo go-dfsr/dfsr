@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/go-ole/go-ole"
+	"github.com/google/uuid"
 	"github.com/scjalliance/comshim"
 
 	"gopkg.in/dfsr.v0/callstat"
@@ -29,9 +30,9 @@ type backlogResult struct {
 // All implementations of the Reporter interface must be threadsafe.
 type Reporter interface {
 	Close()
-	Vector(ctx context.Context, group ole.GUID, tracker dfsr.Tracker) (vector *versionvector.Vector, call callstat.Call, err error)
+	Vector(ctx context.Context, group uuid.UUID, tracker dfsr.Tracker) (vector *versionvector.Vector, call callstat.Call, err error)
 	Backlog(ctx context.Context, vector *versionvector.Vector, tracker dfsr.Tracker) (backlog []int, call callstat.Call, err error)
-	Report(ctx context.Context, group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error)
+	Report(ctx context.Context, group uuid.UUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error)
 }
 
 var _ = (Reporter)((*reporter)(nil)) // Compile-time interface compliance check
@@ -98,7 +99,7 @@ func (r *reporter) Close() {
 // running RPC calls and provides a means of detecting unresponsive hosts.
 //
 // If tracker is nil it will be ignored.
-func (r *reporter) Vector(ctx context.Context, group ole.GUID, tracker dfsr.Tracker) (vector *versionvector.Vector, call callstat.Call, err error) {
+func (r *reporter) Vector(ctx context.Context, group uuid.UUID, tracker dfsr.Tracker) (vector *versionvector.Vector, call callstat.Call, err error) {
 	r.m.Lock()
 	defer r.m.Unlock()
 	call.Begin("Reporter.Vector")
@@ -139,7 +140,7 @@ func (r *reporter) Vector(ctx context.Context, group ole.GUID, tracker dfsr.Trac
 // own goroutine.
 //
 // If tracker is nil it will be ignored.
-func (r *reporter) vector(group ole.GUID, tracker dfsr.Tracker) <-chan vectorResult {
+func (r *reporter) vector(group uuid.UUID, tracker dfsr.Tracker) <-chan vectorResult {
 	ch := make(chan vectorResult, 1)
 	go func() {
 		defer close(ch)
@@ -244,7 +245,7 @@ func (r *reporter) backlog(vector *versionvector.Vector, tracker dfsr.Tracker) <
 }
 
 // Report generates a report when compared against the reference version vector.
-func (r *reporter) Report(ctx context.Context, group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
+func (r *reporter) Report(ctx context.Context, group uuid.UUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
 	if backlog && vector == nil {
 		call.Description = "Reporter.Report"
 		err = errors.New("backlog reports require that a reference member vector is provided")
@@ -284,6 +285,6 @@ func (r *reporter) Report(ctx context.Context, group *ole.GUID, vector *versionv
 	}
 
 	// TODO: Check dimensions of the returned backlog for sanity
-	data, report, err = r.iface.GetReport(*group, "", vdata, int32(flags))
+	data, report, err = r.iface.GetReport(group, "", vdata, int32(flags))
 	return
 }

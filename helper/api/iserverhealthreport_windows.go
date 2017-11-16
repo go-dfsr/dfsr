@@ -7,6 +7,7 @@ import (
 	"unsafe"
 
 	"github.com/go-ole/go-ole"
+	"github.com/google/uuid"
 	"github.com/scjalliance/comutil"
 )
 
@@ -14,7 +15,7 @@ import (
 // component object model interface.
 //
 // In a typical use case, the provided clsid should CLSID_DFSRHelper
-func NewIServerHealthReport(server string, clsid *ole.GUID) (*IServerHealthReport, error) {
+func NewIServerHealthReport(server string, clsid uuid.UUID) (*IServerHealthReport, error) {
 	p, err := comutil.CreateRemoteObject(server, clsid, IID_IServerHealthReport)
 	return (*IServerHealthReport)(unsafe.Pointer(p)), err
 }
@@ -24,13 +25,13 @@ func NewIServerHealthReport(server string, clsid *ole.GUID) (*IServerHealthRepor
 // are returned.
 //
 // [MS-DFSRH]: 3.1.5.4.5
-func (v *IServerHealthReport) GetReferenceVersionVectors(group ole.GUID) (vectors *ole.SafeArrayConversion, err error) {
+func (v *IServerHealthReport) GetReferenceVersionVectors(group uuid.UUID) (vectors *ole.SafeArrayConversion, err error) {
 	vectors = new(ole.SafeArrayConversion)
 	hr, _, _ := syscall.Syscall(
 		uintptr(v.VTable().GetReferenceVersionVectors),
 		3,
 		uintptr(unsafe.Pointer(v)),
-		uintptr(unsafe.Pointer(&group)),
+		uintptr(unsafe.Pointer(comutil.GUID(group))),
 		uintptr(unsafe.Pointer(&vectors.Array)))
 	if hr != 0 {
 		return nil, convertHresultToError(hr)

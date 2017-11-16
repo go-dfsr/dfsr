@@ -229,7 +229,7 @@ func setup(domain string, groupRegex, fromRegex, toRegex, memberRegex, skipRegex
 
 func computeBacklog(ctx context.Context, client *helper.Client, backlog *dfsr.Backlog, wg *sync.WaitGroup) {
 	var values []int
-	values, backlog.Call, backlog.Err = client.Backlog(ctx, backlog.From, backlog.To, *backlog.Group.ID)
+	values, backlog.Call, backlog.Err = client.Backlog(ctx, backlog.From, backlog.To, backlog.Group.ID)
 	if n := len(values); n == len(backlog.Group.Folders) {
 		backlog.Folders = make([]dfsr.FolderBacklog, n)
 		for v := 0; v < n; v++ {

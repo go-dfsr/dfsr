@@ -82,7 +82,7 @@ func (w *worker) compute(ctx context.Context, backlog *dfsr.Backlog, updates []*
 	}
 
 	var values []int
-	values, backlog.Call, backlog.Err = w.client.Backlog(ctx, backlog.From, backlog.To, *backlog.Group.ID)
+	values, backlog.Call, backlog.Err = w.client.Backlog(ctx, backlog.From, backlog.To, backlog.Group.ID)
 	computed.Done()
 
 	if n := len(values); n == len(backlog.Group.Folders) {

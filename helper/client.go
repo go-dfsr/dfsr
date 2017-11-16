@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/go-ole/go-ole"
+	"github.com/google/uuid"
 	"gopkg.in/dfsr.v0/callstat"
 	"gopkg.in/dfsr.v0/versionvector"
 )
@@ -80,7 +81,7 @@ func (c *Client) Close() {
 // Backlog returns the outgoing backlog from one DSFR member to another. The
 // backlog of each replicated folder within the requested group is returned.
 // The members are identified by their fully qualified domain names.
-func (c *Client) Backlog(ctx context.Context, from, to string, group ole.GUID) (backlog []int, call callstat.Call, err error) {
+func (c *Client) Backlog(ctx context.Context, from, to string, group uuid.UUID) (backlog []int, call callstat.Call, err error) {
 	call.Begin("Client.Backlog")
 	defer call.Complete(err)
 
@@ -109,7 +110,7 @@ func (c *Client) Backlog(ctx context.Context, from, to string, group ole.GUID) (
 // Vector returns the current reference version vector of the requested
 // replication group on the specified DFSR member. The member is identified by
 // its fully qualified domain name.
-func (c *Client) Vector(ctx context.Context, server string, group *ole.GUID) (vector *versionvector.Vector, call callstat.Call, err error) {
+func (c *Client) Vector(ctx context.Context, server string, group uuid.UUID) (vector *versionvector.Vector, call callstat.Call, err error) {
 	call.Begin("Client.Vector")
 	defer call.Complete(err)
 
@@ -118,13 +119,13 @@ func (c *Client) Vector(ctx context.Context, server string, group *ole.GUID) (ve
 		return
 	}
 
-	vector, vcall, err := e.Vector(ctx, *group)
+	vector, vcall, err := e.Vector(ctx, group)
 	call.Add(&vcall)
 	return
 }
 
 // Report generates a report for the requested replication group.
-func (c *Client) Report(ctx context.Context, server string, group *ole.GUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
+func (c *Client) Report(ctx context.Context, server string, group uuid.UUID, vector *versionvector.Vector, backlog, files bool) (data *ole.SafeArrayConversion, report string, call callstat.Call, err error) {
 	call.Begin("Client.Report")
 	defer call.Complete(err)
 

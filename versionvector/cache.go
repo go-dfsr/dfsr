@@ -8,11 +8,11 @@ import (
 	"gopkg.in/dfsr.v0/callstat"
 	"gopkg.in/dfsr.v0/dfsr"
 
-	"github.com/go-ole/go-ole"
+	"github.com/google/uuid"
 )
 
 // Lookup defines a version vector lookup function.
-type Lookup func(ctx context.Context, guid ole.GUID, tracker dfsr.Tracker) (vector *Vector, call callstat.Call, err error)
+type Lookup func(ctx context.Context, guid uuid.UUID, tracker dfsr.Tracker) (vector *Vector, call callstat.Call, err error)
 
 type entry struct {
 	vector *Vector
@@ -21,7 +21,7 @@ type entry struct {
 
 func castLookup(lookup Lookup) cache.Lookup {
 	return func(ctx context.Context, key cache.Key, tracker dfsr.Tracker) (value cache.Value, err error) {
-		vector, call, err := lookup(ctx, key.(ole.GUID), tracker)
+		vector, call, err := lookup(ctx, key.(uuid.UUID), tracker)
 		value = entry{
 			vector: vector,
 			call:   call,
@@ -62,7 +62,7 @@ func (cache *Cache) Evict() {
 // exists in the cache for that GUID, the existing value is replaced.
 //
 // If the cache has been closed then Set will do nothing.
-func (cache *Cache) Set(guid ole.GUID, vector *Vector, call callstat.Call) {
+func (cache *Cache) Set(guid uuid.UUID, vector *Vector, call callstat.Call) {
 	cache.c.Set(guid, entry{
 		vector: vector,
 		call:   call,
@@ -74,7 +74,7 @@ func (cache *Cache) Set(guid ole.GUID, vector *Vector, call callstat.Call) {
 // false.
 //
 // If the cache has been closed then ok will be false.
-func (cache *Cache) Value(guid ole.GUID) (vector *Vector, call callstat.Call, ok bool) {
+func (cache *Cache) Value(guid uuid.UUID) (vector *Vector, call callstat.Call, ok bool) {
 	v, ok := cache.c.Value(guid)
 	if ok {
 		e := v.(entry)
@@ -94,7 +94,7 @@ func (cache *Cache) Value(guid ole.GUID) (vector *Vector, call callstat.Call, ok
 // lookup will be performed.
 //
 // If the cache has been closed then ErrClosed will be returned.
-func (cache *Cache) Lookup(ctx context.Context, guid ole.GUID, tracker dfsr.Tracker) (vector *Vector, call callstat.Call, err error) {
+func (cache *Cache) Lookup(ctx context.Context, guid uuid.UUID, tracker dfsr.Tracker) (vector *Vector, call callstat.Call, err error) {
 	call.Begin("Cache.Lookup")
 	defer call.Complete(err)
 
