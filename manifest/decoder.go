@@ -2,6 +2,7 @@ package manifest
 
 import (
 	"encoding/xml"
+	"fmt"
 	"io"
 )
 
@@ -11,6 +12,7 @@ const resourceElement = "Resource"
 // input stream.
 type Decoder struct {
 	stream *xml.Decoder
+	count  int64
 }
 
 // NewDecoder returns a DFSR conflicted and deleted manifest decoder that reads
@@ -31,7 +33,10 @@ func (d *Decoder) Read() (resource Resource, err error) {
 		switch se := token.(type) {
 		case xml.StartElement:
 			if se.Name.Local == resourceElement {
-				err = d.stream.DecodeElement(&resource, &se)
+				d.count++
+				if err = d.stream.DecodeElement(&resource, &se); err != nil {
+					err = fmt.Errorf("manifest.Decoder: element %d: %v", d.count, err)
+				}
 				return
 			}
 		default:
