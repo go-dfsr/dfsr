@@ -32,7 +32,7 @@ func Find(path string) string {
 }
 
 func isManifest(path string) bool {
-	if !strings.HasSuffix(strings.ToLower(path), strings.ToLower(StandardPath)) {
+	if !isManifestPath(path) {
 		return false
 	}
 	fi, err := os.Stat(path)
@@ -40,4 +40,9 @@ func isManifest(path string) bool {
 		return false
 	}
 	return fi.Mode().IsRegular()
+}
+
+func isManifestPath(path string) bool {
+	_, file := filepath.Split(path)
+	return strings.EqualFold(file, StandardFile)
 }
